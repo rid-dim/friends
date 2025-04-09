@@ -15,9 +15,9 @@ The application uses a hybrid approach for communication:
 
 ```mermaid
 graph LR
-    A[App] <--->|WebSocket| B[Autonomi Proxy]
-    B <--->|UDP (Encrypted)| C[Autonomi Proxy]
-    C <--->|WebSocket| D[App]
+    A[App] -- WebSocket --> B[Autonomi Proxy]
+    B -- Encrypted UDP --> C[Autonomi Proxy]
+    C -- WebSocket --> D[App]
 ```
 
 - **WebSocket Connection**: Connects the app to the Autonomi proxy
