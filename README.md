@@ -5,7 +5,7 @@ A decentralized peer-to-peer chat application that enables secure, private commu
 ## Features
 
 - **P2P Communication**: Direct peer-to-peer messaging between friends
-- **Automatic Translation**: Built-in translation powered by Ollama (requires a local Ollama server on at least one side)
+- **Automatic Translation**: Built-in translation powered by Ollama (requires a local Ollama server on at least one side) -> this might be removed again short term in favor of building a reasonable plugin system where this can be re-introduced again
 - **Dark/Light Mode**: User-friendly interface 2 themes
 - **File Sharing**: Support for sending files and images (currently a bit unstable)
 
@@ -31,10 +31,14 @@ graph LR
 - **Direct Messages within Multi-user Chats**: Private communication within multi-user chats using public/private key encryption
 - **Improved File Sharing**: Enhanced reliability and bug fixes
 
+### Mid-term Goals
+- **plugin system for Themes**: replacing light/darkmode - just loading the css from Autonomi (immutable Themes! :-)
+- **plugin system for Chat Message/input interaction**: this enables e.g. automatic translations, sentiment checking, auto-moderation (message-filtering for certain content), tenor integration, custom smilies, ... via JS Webcomponents loaded from Autonomi (immutable Extensions! :-)
+- **Library Development**: Core functionality packaged as a reusable library for other applications
+
 ### Long-term Vision
 - **Voice Chat**: Real-time audio communication
 - **Video Chat**: Video conferencing capabilities
-- **Library Development**: Core functionality packaged as a reusable library for other applications
 
 ### Extended Applications
 The core technology can be adapted for various use cases:
