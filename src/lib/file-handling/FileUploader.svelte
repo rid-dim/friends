@@ -1,17 +1,16 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { processFile, createFileChunks } from './fileProcessor';
-  import type { FileAttachment, AttachmentChunk } from './types';
-  import { t } from '../../i18n/i18n';
+  import { processFile } from './fileProcessor';
+  import type { FileAttachment } from './types';
   
   // Props
   export let disabled: boolean = false;
-  export let maxSize: number = 50 * 1024 * 1024; // Default max 50MB
+  export let maxSize: number = 100 * 1024 * 1024; // 100MB max (generous limit to prevent memory issues)
   export let acceptedTypes: string = ""; // File types to accept, e.g. "image/*,.pdf"
   
   // Event dispatcher
   const dispatch = createEventDispatcher<{
-    fileSelected: { attachment: FileAttachment, chunks?: AttachmentChunk[] };
+    fileSelected: { attachment: FileAttachment };
     error: string;
   }>();
   
@@ -28,7 +27,7 @@
     
     // Check file size
     if (file.size > maxSize) {
-      dispatch('error', $t('fileTooLarge') + (maxSize / (1024 * 1024)) + 'MB');
+      dispatch('error', `File too large! Maximum size is ${Math.round(maxSize / (1024 * 1024))}MB`);
       // Reset the input
       fileInput.value = '';
       return;
@@ -37,20 +36,12 @@
     uploading = true;
     
     try {
-      // Process the file
+      // Process the file - always as complete base64 data
       const attachment = await processFile(file);
-      
-      if (attachment.chunks && attachment.chunks > 1) {
-        // For large files, create chunks
-        const chunks = await createFileChunks(file, attachment.id);
-        dispatch('fileSelected', { attachment, chunks });
-      } else {
-        // For small files, just send the attachment
-        dispatch('fileSelected', { attachment });
-      }
+      dispatch('fileSelected', { attachment });
     } catch (error) {
       console.error('Error processing file:', error);
-      dispatch('error', 'Fehler beim Verarbeiten der Datei');
+      dispatch('error', 'Error processing file');
     } finally {
       uploading = false;
       // Reset the input to allow selecting the same file again
@@ -82,7 +73,7 @@
     {#if uploading}
       <div class="spinner"></div>
     {:else}
-      <span class="clip-icon">📎</span> {$t('attachFile')}
+      <span class="clip-icon">📎</span> Attach File
     {/if}
   </button>
 </div>

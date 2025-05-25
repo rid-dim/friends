@@ -36,4 +36,4 @@ export interface AttachmentMessage {
 }
 
 // Constants
-export const MAX_CHUNK_SIZE = 60000; // Maximum size in bytes (~60KB) for each chunk 
+export const MAX_CHUNK_SIZE = 8000; // Maximum size in bytes (~8KB) for each chunk to stay under WebRTC limits 

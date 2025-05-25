@@ -1,68 +1,313 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { t, language } from './i18n/i18n';
-  import LanguageSelector from './i18n/LanguageSelector.svelte';
   
   // Import file handling components and utilities
   import FileUploader from './lib/file-handling/FileUploader.svelte';
   import AttachmentView from './lib/file-handling/AttachmentView.svelte';
-  import type { FileAttachment, AttachmentChunk, AttachmentMessage } from './lib/file-handling/types';
-  import { reassembleChunks } from './lib/file-handling/fileProcessor';
+  import type { FileAttachment } from './lib/file-handling/types';
   
-  // Define a safe constant for WebSocket.OPEN that works during SSR
-  const WEBSOCKET_OPEN = browser ? WebSocket.OPEN : undefined;
+  // Backend and account package related types and variables
+  interface AccountPackage {
+    username: string;
+    profileImage?: string; // datamap address
+  }
   
-  let ws: WebSocket | null = null;
-  // Extended message type to include attachments
+  // Backend related state
+  let backendUrl = '';
+  let isLoadingAccountPackage = false;
+  let accountPackage: AccountPackage | null = null;
+  let showAccountCreation = false;
+  let accountCreationForm = {
+    username: '',
+    profileImage: ''
+  };
+  let accountCreationError = '';
+  
+  // WebRTC related variables
+  let peerConnection: RTCPeerConnection | null = null;
+  let dataChannel: RTCDataChannel | null = null;
+  let isInitiator = false;
+  
+  // Simple heartbeat system for keeping connection alive
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  let lastHeartbeatReceived = 0;
+  let connectionCheckInterval: ReturnType<typeof setInterval> | null = null;
+  let heartbeatsReceived = 0;
+  let isTabVisible = true; // Track if tab is in foreground
+  
+  // WebAssembly heartbeat system - always active, much more efficient
+  let wasmModule: WebAssembly.WebAssemblyInstantiatedSource | null = null;
+  let wasmHeartbeatActive = false;
+  let wasmHeartbeatCallback: ((timestamp: number) => void) | null = null;
+  let wasmTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  
+  let HEARTBEAT_INTERVAL = 5000; // Send heartbeat every 5 seconds (variable now)
+  const CONNECTION_TIMEOUT = 15000; // Consider connection dead after 15 seconds without heartbeat
+  
+  // Connection states
+  type ConnectionState = 'disconnected' | 'creating-offer' | 'waiting-for-answer' | 'waiting-for-offer' | 'processing-answer' | 'connecting' | 'connected' | 'failed';
+  let connectionState: ConnectionState = 'disconnected';
+  
+  // Offer/Answer handling
+  let localOffer = '';
+  let remoteAnswer = '';
+  let remoteOffer = '';
+  let localAnswer = '';
+  let showOfferAnswer = false;
+  let offerRefreshInterval: ReturnType<typeof setInterval> | null = null;
+  let offerCreatedAt = 0;
+  
+  // Chat messages
   let messages: Array<{
     nick: string, 
     text: string, 
     timestamp: Date, 
-    isSelf: boolean,
-    attachment?: FileAttachment,
-    pendingChunks?: boolean,
-    receivedChunks?: AttachmentChunk[]
+    isSelf: boolean, 
+    attachment?: FileAttachment
   }> = [];
   
   // File attachment related variables
   let pendingAttachment: FileAttachment | null = null;
-  let pendingChunks: AttachmentChunk[] | null = null;
-  let incomingAttachments: Record<string, { 
-    attachment: FileAttachment, 
-    chunks: AttachmentChunk[],
-    messageIndex: number 
+  let incomingFiles: Record<string, {
+    messageIndex: number;
+    chunks: string[];
+    totalChunks: number;
+    attachment: FileAttachment;
   }> = {};
   
+  // UI state
   let config = {
-    proxy: '127.0.0.1:17017',
-    target: '0.0.0.0:17171',
-    encryptionKey: '1234567890',
-    nick: 'rid'
+    nick: 'User'
   };
-  let messageInput = '';
-  let connectionStatus = $t('wsDisconnected');
-  let peerConnectionStatus = $t('peerNoConnection');
-  let reconnectAttempts = 0;
-  let maxReconnectAttempts = 5;
-  let reconnectInterval: ReturnType<typeof setTimeout> | null = null;
-  let udpConnectionInfo = '';
-  let notification = '';
   
+  // Update nickname when account package is loaded
+  $: if (accountPackage && accountPackage.username) {
+    config.nick = accountPackage.username;
+  }
+  let messageInput = '';
+  let notification = '';
+  let isDarkMode = false;
+  let showConfig = true;
   let configWidth = 220;
   let isDragging = false;
-  
-  // Referenz auf den Nachrichten-Container für Auto-Scroll
   let messagesContainer: HTMLDivElement;
   
-  let showConfig = true;
-  
-  let isDarkMode = false;
+  // Notification support for background messages
+  let notificationsEnabled = false;
   
   // Check localStorage for dark mode preference
   if (browser) {
     const storedTheme = localStorage.getItem('theme');
     isDarkMode = storedTheme === 'dark';
+  }
+  
+  // Parse backend URL from query parameters
+  function parseBackendUrl(): string {
+    if (!browser) return '';
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('backend') || '';
+  }
+  
+  // Convert JSON to byte array for scratchpad storage
+  function jsonToByteArray(jsonString: string): number[] {
+    const encoder = new TextEncoder();
+    const uint8Array = encoder.encode(jsonString);
+    return Array.from(uint8Array);
+  }
+  
+  // Convert byte array back to JSON
+  function byteArrayToJson(byteArray: number[]): any {
+    const uint8Array = new Uint8Array(byteArray);
+    const decoder = new TextDecoder();
+    const jsonString = decoder.decode(uint8Array);
+    return JSON.parse(jsonString);
+  }
+  
+  // Fetch account package from backend
+  async function fetchAccountPackage(): Promise<AccountPackage | null> {
+    if (!backendUrl) {
+      console.log('🚫 No backend URL - skipping fetch');
+      return null;
+    }
+    
+    const url = `${backendUrl}/ant-0/scratchpad-private`;
+    console.log('🌐 Fetching account package from:', url);
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'Ant-App-ID': 'friends'
+        }
+      });
+      
+      console.log('📡 Response status:', response.status, response.statusText);
+      
+      if (response.status === 404) {
+        console.log('📭 Account package not found (404) - will offer creation');
+        return null; // Account package doesn't exist yet
+      }
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const scratchpadData = await response.json();
+      console.log('📦 Raw scratchpad data:', scratchpadData);
+      
+      // Extract account package from scratchpad format
+      // Check if it's a single object (not array) or array format
+      let chunk = null;
+      if (Array.isArray(scratchpadData) && scratchpadData.length > 0) {
+        // Array format
+        chunk = scratchpadData[0];
+        console.log('📦 Using array format, first chunk:', chunk);
+      } else if (scratchpadData && scratchpadData.dweb_type === "PrivateScratchpad") {
+        // Single object format
+        chunk = scratchpadData;
+        console.log('📦 Using single object format:', chunk);
+      }
+      
+      if (chunk && chunk.unencrypted_data && Array.isArray(chunk.unencrypted_data)) {
+        try {
+          const accountPackage = byteArrayToJson(chunk.unencrypted_data);
+          console.log('✅ Successfully extracted account package:', accountPackage);
+          return accountPackage as AccountPackage;
+        } catch (error) {
+          console.error('❌ Error parsing unencrypted_data:', error);
+          return null;
+        }
+      } else {
+        console.warn('⚠️ No valid unencrypted_data found in scratchpad');
+        console.warn('⚠️ Chunk structure:', chunk);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error fetching account package:', error);
+      showNotification('Error fetching account package: ' + error);
+      return null;
+    }
+  }
+  
+  // Create account package on backend
+  async function createAccountPackage(accountData: AccountPackage): Promise<boolean> {
+    if (!backendUrl) return false;
+    
+    console.log('💾 Creating account package:', accountData);
+    
+    try {
+      // Convert account data to JSON string, then to byte array
+      const accountJson = JSON.stringify(accountData);
+      const accountBytes = jsonToByteArray(accountJson);
+      
+      // Wrap in scratchpad format
+      const scratchpadPayload = {
+        counter: 0,
+        data_encoding: 0,
+        dweb_type: "PrivateScratchpad",
+        encryped_data: [0],
+        scratchpad_address: "string",
+        unencrypted_data: accountBytes
+      };
+      
+      console.log('💾 Scratchpad payload:', scratchpadPayload);
+      console.log('💾 Account bytes length:', accountBytes.length);
+      
+      const response = await fetch(`${backendUrl}/ant-0/scratchpad-private`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Ant-App-ID': 'friends'
+        },
+        body: JSON.stringify(scratchpadPayload)
+      });
+      
+      console.log('📡 Create response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Create failed with response:', errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      console.log('✅ Account package created successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Error creating account package:', error);
+      accountCreationError = 'Error creating account: ' + error;
+      return false;
+    }
+  }
+  
+  // Handle account creation form submission
+  async function handleAccountCreation() {
+    if (!accountCreationForm.username.trim()) {
+      accountCreationError = 'Username is required';
+      return;
+    }
+    
+    accountCreationError = '';
+    isLoadingAccountPackage = true;
+    
+    const accountData: AccountPackage = {
+      username: accountCreationForm.username.trim(),
+      profileImage: accountCreationForm.profileImage.trim() || undefined
+    };
+    
+    const success = await createAccountPackage(accountData);
+    
+    if (success) {
+      accountPackage = accountData;
+      showAccountCreation = false;
+      showNotification('Account package created successfully!');
+    }
+    
+    isLoadingAccountPackage = false;
+  }
+  
+  // Cancel account creation
+  function cancelAccountCreation() {
+    showAccountCreation = false;
+    accountCreationForm = { username: '', profileImage: '' };
+    accountCreationError = '';
+  }
+  
+  // Initialize backend integration
+  async function initializeBackend() {
+    console.log('🔧 Initializing backend integration...');
+    backendUrl = parseBackendUrl();
+    console.log('🔧 Parsed backend URL:', backendUrl || 'None provided');
+    
+    if (!backendUrl) {
+      console.log('✅ No backend URL provided, using P2P mode only');
+      return;
+    }
+    
+    console.log('🔧 Backend URL detected:', backendUrl);
+    console.log('🔄 Starting to fetch account package...');
+    isLoadingAccountPackage = true;
+    
+    try {
+      const fetchedPackage = await fetchAccountPackage();
+      console.log('📦 Fetch result:', fetchedPackage);
+      
+      if (fetchedPackage) {
+        accountPackage = fetchedPackage;
+        showNotification(`Welcome back, ${fetchedPackage.username}!`);
+        console.log('✅ Account package loaded successfully:', fetchedPackage);
+      } else {
+        console.log('⚠️ No account package found (404 or error) - showing creation dialog');
+        // 404 or error - offer to create account package
+        showAccountCreation = true;
+      }
+    } catch (error) {
+      console.error('❌ Error during backend initialization:', error);
+    } finally {
+      isLoadingAccountPackage = false;
+      console.log('🔧 Backend initialization complete');
+    }
   }
   
   function toggleTheme(newValue?: boolean) {
@@ -74,304 +319,534 @@
     
     if (browser) {
       localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-      console.log('Theme changed to:', isDarkMode ? 'dark' : 'light');
     }
   }
   
-  // Automatisch zum Ende des Chats scrollen
   function scrollToBottom() {
     if (messagesContainer) {
+      setTimeout(() => {
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }, 10);
     }
   }
   
-  // Funktion zum Abrufen der WebSocket-Info
-  async function fetchWebSocketInfo() {
+  // WebRTC Configuration optimized for localhost testing
+  const rtcConfig: RTCConfiguration = {
+    iceServers: [
+      // Only use reliable STUN servers for localhost
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ],
+    iceCandidatePoolSize: 10,
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require'
+    // Removed iceTransportPolicy to allow both STUN and host candidates
+  };
+  
+  // Initialize WebRTC peer connection
+  function initializePeerConnection() {
     if (!browser) return;
     
-    try {
-      const response = await fetch(`http://${config.proxy.split(':')[0]}:${config.proxy.split(':')[1]}/v0/ws/info`);
-      if (response.ok) {
-        const data = await response.json();
-        udpConnectionInfo = data.udp_connection_info.replace('udp://', '');
-        console.log('UDP-Verbindungsinfo abgerufen:', udpConnectionInfo);
+    console.log('Initializing PeerConnection with config:', rtcConfig);
+    peerConnection = new RTCPeerConnection(rtcConfig);
+    
+    // Handle ICE candidates
+    peerConnection.onicecandidate = (event) => {
+      console.log('ICE candidate event:', event);
+      if (event.candidate) {
+        console.log('New ICE Candidate:', event.candidate);
       } else {
-        console.error('Fehler beim Abrufen der WebSocket-Info:', response.statusText);
+        console.log('ICE gathering completed');
       }
-    } catch (error) {
-      console.error('Fehler beim Abrufen der WebSocket-Info:', error);
-    }
+    };
+    
+    // Handle connection state changes
+    peerConnection.onconnectionstatechange = () => {
+      console.log('Connection state changed to:', peerConnection?.connectionState);
+      switch (peerConnection?.connectionState) {
+        case 'connected':
+          connectionState = 'connected';
+          showNotification('WebRTC connected!');
+          break;
+        case 'disconnected':
+        case 'failed':
+          connectionState = 'failed';
+          console.error('WebRTC connection failed or disconnected');
+          showNotification('WebRTC disconnected');
+          break;
+        case 'connecting':
+          connectionState = 'connecting';
+          console.log('WebRTC connecting...');
+          break;
+      }
+    };
+    
+    // Handle ICE connection state changes (more detailed than connectionState)
+    peerConnection.oniceconnectionstatechange = () => {
+      const iceState = peerConnection?.iceConnectionState;
+      console.log('ICE connection state:', iceState);
+      
+      switch (iceState) {
+        case 'connected':
+        case 'completed':
+          console.log('ICE connection established/optimized successfully!');
+          break;
+        case 'disconnected':
+          console.warn('ICE connection temporarily disconnected - may recover');
+          // Don't immediately fail, give it a chance to reconnect
+          setTimeout(() => {
+            if (peerConnection?.iceConnectionState === 'disconnected') {
+              console.error('ICE connection remained disconnected - connection likely dead');
+              connectionState = 'failed';
+              showNotification('Connection lost. ICE connection failed.');
+              stopConnectionMonitoring();
+            }
+          }, 10000); // Wait 10 seconds before declaring it dead
+          break;
+        case 'failed':
+          console.error('ICE connection failed permanently!');
+          console.error('- Firewall is blocking WebRTC');
+          console.error('- No TURN server available for relay');
+          console.error('- Check about:webrtc in Firefox for details');
+          showNotification('ICE connection failed. Check firewall settings or try a different browser.');
+          connectionState = 'failed';
+          stopConnectionMonitoring();
+          break;
+        case 'closed':
+          console.log('ICE connection closed');
+          connectionState = 'disconnected';
+          stopConnectionMonitoring();
+          break;
+      }
+    };
+    
+    // Handle signaling state changes
+    peerConnection.onsignalingstatechange = () => {
+      console.log('Signaling state:', peerConnection?.signalingState);
+    };
+    
+    // Handle incoming data channel (for receiver)
+    peerConnection.ondatachannel = (event) => {
+      console.log('Incoming data channel:', event.channel);
+      const channel = event.channel;
+      setupDataChannel(channel);
+    };
+    
+    return peerConnection;
   }
   
-  function connect() {
-    if (!browser) {
-      console.log('WebSocket connection skipped during SSR.');
-      return;
-    }
+  // Setup data channel for messaging
+  function setupDataChannel(channel: RTCDataChannel) {
+    dataChannel = channel;
     
-    if (!config.proxy || !config.target || !config.encryptionKey || !config.nick) {
-      alert($t('fillAllFields'));
-      return;
-    }
-    
-    reconnectAttempts = 0;
-    
-    if (reconnectInterval) {
-      clearTimeout(reconnectInterval);
-      reconnectInterval = null;
-    }
-        
-    const wsUrl = `ws://${config.proxy.split(':')[0]}:${config.proxy.split(':')[1]}/v0/ws/proxy?remote_host=${encodeURIComponent(config.target.split(':')[0])}&remote_port=${encodeURIComponent(config.target.split(':')[1])}&encryption_key=${encodeURIComponent(config.encryptionKey)}`;
-    console.log(`Verbinde mit ${wsUrl}`);
-    
-    if (ws) {
-      ws.close();
-    }
-    
-    ws = new WebSocket(wsUrl);
-    
-    ws.onopen = () => {
-      connectionStatus = $t('wsConnected');
-      console.log("WebSocket-Verbindung hergestellt, readyState:", ws ? ws.readyState : "kein ws");
+    channel.onopen = () => {
+      console.log('Data channel opened');
+      connectionState = 'connected';
+      startConnectionMonitoring();
     };
     
-    ws.onclose = (event) => {
-      connectionStatus = $t('wsDisconnected');
-      console.log(`WebSocket geschlossen: Code ${event.code}, Grund: ${event.reason}`);
-      
-      if (event.code !== 1000) {
-        attemptReconnect();
-      }
-    };
-    
-    ws.onmessage = (event) => {
+    channel.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        const messageType = data.type;
-        
-        if (messageType === 'status') {
-          const status = data.status;
-          const statusMessage = data.message || '';
-          
-          peerConnectionStatus = translateStatus(status, statusMessage);
-          console.log(`Verbindungsstatus: ${status} - ${statusMessage}`);
-        } 
-        else if (messageType === 'data') {
-          const messageText = data.data || '';
-          console.log("Empfangene Rohdaten:", messageText);
-          
-          const colonIndex = messageText.indexOf(':');
-          
-          if (colonIndex > 0) {
-            const nick = messageText.substring(0, colonIndex);
-            const content = messageText.substring(colonIndex + 1);
-            
-            console.log(`Empfangene Nachricht von ${nick}, vollständiger Inhalt:`, content);
-            
-            const structuredMessage = parseStructuredMessage(content);
-            console.log("Parsing-Ergebnis:", structuredMessage);
-            
-            if (structuredMessage && structuredMessage.isAttachmentChunk && structuredMessage.attachmentChunk) {
-              handleAttachmentChunk(nick, structuredMessage.attachmentChunk);
-              return;
-            }
-            
-            let initialDisplayText = content;
-            
-            if (structuredMessage && structuredMessage.original) {
-              initialDisplayText = structuredMessage.original;
-            }
-            
-            const messageIndex = messages.length;
-            const attachment = structuredMessage?.attachment;
-            
-            let displayText = "";
-            if (structuredMessage && structuredMessage.original && structuredMessage.original.trim()) {
-              displayText = structuredMessage.original;
-            } else if (!attachment) {
-              displayText = initialDisplayText;
-            }
-            
-            if (attachment && !displayText.trim()) {
-              displayText = "";
-            }
-            
-            messages = [...messages, {
-              nick,
-              text: displayText,
-              timestamp: new Date(),
-              isSelf: false,
-              attachment: attachment,
-              pendingChunks: attachment?.chunks && attachment.chunks > 1 ? true : false
-            }];
-            setTimeout(scrollToBottom, 10);
-            
-            if (structuredMessage && structuredMessage.original) {
-              handleStructuredMessage(nick, structuredMessage, messageIndex);
-            } else if (!structuredMessage?.attachment) {
-              console.log("Normale Textnachricht erkannt");
-              updateMessage(messageIndex, {
-                text: content
-              });
-              setTimeout(scrollToBottom, 10);
-            }
-          } else {
-            messages = [...messages, {
-              nick: 'Unbekannt',
-              text: messageText,
-              timestamp: new Date(),
-              isSelf: false
-            }];
-            
-            setTimeout(scrollToBottom, 10);
-          }
-        }
-        else if (messageType === 'error') {
-          const errorMessage = data.message || 'Unbekannter Fehler';
-          console.error(`WebSocket Fehler: ${errorMessage}`);
-          alert(`Fehler: ${errorMessage}`);
-        }
-      } catch (e) {
-        console.error('Fehler beim Verarbeiten der Nachricht:', e);
+        handleIncomingMessage(data);
+      } catch (error) {
+        console.error('Error parsing message:', error);
       }
     };
     
-    ws.onerror = (error) => {
-      console.error('WebSocket Fehler:', error);
-      connectionStatus = 'Fehler';
+    channel.onclose = () => {
+      console.log('Data channel closed');
+      connectionState = 'failed';
+      showNotification('Connection lost. DataChannel closed.');
+      stopConnectionMonitoring();
     };
-  }
-  
-  $: if ($t) {
-    if (connectionStatus === 'Verbunden' || connectionStatus === $t('wsConnected')) {
-      connectionStatus = $t('wsConnected');
-    } else if (connectionStatus === 'Getrennt' || connectionStatus === $t('wsDisconnected')) {
-      connectionStatus = $t('wsDisconnected');
-    } else if (connectionStatus === 'Fehler' || connectionStatus === $t('wsError')) {
-      connectionStatus = $t('wsError');
-    }
     
-    if (peerConnectionStatus === $t('peerNoConnection') || peerConnectionStatus === 'Getrennt') {
-      peerConnectionStatus = $t('peerNoConnection');
-    } else if (peerConnectionStatus.includes('Warten auf WebSocket') || peerConnectionStatus.includes('Waiting for WebSocket')) {
-      peerConnectionStatus = $t('peerWaitingWs');
-    } else if (peerConnectionStatus.includes('Warten auf UDP') || peerConnectionStatus.includes('Waiting for UDP')) {
-      peerConnectionStatus = $t('peerWaitingUdp');
-    } else if (peerConnectionStatus === 'Verbunden' || peerConnectionStatus === $t('peerConnectionActive')) {
-      peerConnectionStatus = $t('peerConnectionActive');
-    } else if (peerConnectionStatus.includes('Fehler:') || peerConnectionStatus.includes('Error:')) {
-      const errorMsg = peerConnectionStatus.split(':')[1].trim();
-      peerConnectionStatus = $t('peerConnectionError') + errorMsg;
-    } else if (peerConnectionStatus.includes('Unbekannter Status:') || peerConnectionStatus.includes('Unknown status:')) {
-      const status = peerConnectionStatus.split(':')[1].trim();
-      peerConnectionStatus = $t('peerStatusUnknown') + status;
-    }
-  }
-  
-  function translateStatus(status: string, message: string): string {
-    switch (status) {
-      case 'CONNECTED':
-        return $t('peerWaitingWs');
-      case 'UDP_WAITING':
-        return $t('peerWaitingUdp');
-      case 'UDP_ESTABLISHED':
-        return $t('peerConnectionActive');
-      case 'ERROR':
-        return $t('peerConnectionError') + message;
-      default:
-        return $t('peerStatusUnknown') + status;
-    }
-  }
-  
-  function attemptReconnect() {
-    if (reconnectAttempts >= maxReconnectAttempts) {
-      console.log(`Maximale Anzahl an Wiederverbindungsversuchen (${maxReconnectAttempts}) erreicht.`);
-      return;
-    }
+    channel.onerror = (error) => {
+      console.error('Data channel error:', error);
+      connectionState = 'failed';
+      showNotification('Connection error occurred.');
+      stopConnectionMonitoring();
+    };
     
-    reconnectAttempts++;
-    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000);
-    
-    console.log(`Versuche Wiederverbindung in ${delay}ms (Versuch ${reconnectAttempts}/${maxReconnectAttempts})...`);
-    
-    reconnectInterval = setTimeout(() => {
-      if (browser) {
-        console.log("Versuche Wiederverbindung...");
-        connect();
+    // Monitor buffered amount to detect congestion
+    setInterval(() => {
+      if (channel.readyState === 'open' && channel.bufferedAmount > 0) {
+        console.log('DataChannel buffered amount:', channel.bufferedAmount);
       }
-    }, delay);
+    }, 10000);
   }
   
-  function sendMessage() {
-    if (!browser || (!messageInput.trim() && !pendingAttachment) || !ws || connectionStatus !== $t('wsConnected')) return;
+  // Start WebRTC native connection monitoring (no manual heartbeats needed!)
+  function startConnectionMonitoring() {
+    console.log('🔗 Starting WebRTC native connection monitoring');
     
-    const originalMessage = sanitizeForJson(messageInput.trim());
-    const attachment = pendingAttachment;
-    const chunks = pendingChunks;
-    
-    const messageIndex = messages.length;
-    
-    messages = [...messages, {
-      nick: config.nick,
-      text: originalMessage,
-      timestamp: new Date(),
-      isSelf: true,
-      attachment: attachment || undefined
-    }];
-    
-    messageInput = '';
-    pendingAttachment = null;
-    pendingChunks = null;
-    
-    setTimeout(scrollToBottom, 10);
-    
-    if (attachment && chunks && chunks.length > 1) {
-      const structuredContent = createStructuredMessage(
-        originalMessage, 
-        undefined,
-        undefined, 
-        {
-          ...attachment,
-          data: undefined
-        }
-      );
-      
-      sendFormattedMessage(structuredContent);
-      
-      chunks.forEach((chunk, i) => {
-        setTimeout(() => {
-          const chunkMessage = createStructuredMessage("", undefined, undefined, undefined, chunk);
-          sendFormattedMessage(chunkMessage);
-          console.log(`Chunk ${i+1}/${chunks.length} gesendet für Anhang ${attachment.id}`);
-        }, i * 100);
-      });
-      
+    if (!peerConnection) {
+      console.warn('No peer connection available for monitoring');
       return;
     }
     
-    const structuredContent = createStructuredMessage(originalMessage, undefined, undefined, attachment);
-    sendFormattedMessage(structuredContent);
-  }
-  
-  function sendFormattedMessage(messageText: string) {
-    const userMessage = `${config.nick}:${messageText}`;
-    
-    const jsonPayload = JSON.stringify({
-      type: "data",
-      data: userMessage
+    // Monitor ICE connection state changes
+    peerConnection.addEventListener('iceconnectionstatechange', () => {
+      const iceState = peerConnection?.iceConnectionState;
+      console.log(`🧊 ICE Connection State: ${iceState}`);
+      
+      switch (iceState) {
+        case 'connected':
+        case 'completed':
+          connectionState = 'connected';
+          console.log('✅ WebRTC connection established');
+          break;
+          
+        case 'disconnected':
+          console.warn('⚠️ WebRTC connection temporarily disconnected');
+          connectionState = 'connecting'; // Don't immediately fail, might reconnect
+          showNotification('Connection temporarily lost, trying to reconnect...');
+          break;
+          
+        case 'failed':
+          console.error('❌ WebRTC connection failed');
+          connectionState = 'failed';
+          showNotification('Connection failed. Please reload page.');
+          stopConnectionMonitoring();
+          break;
+          
+        case 'closed':
+          console.log('🔒 WebRTC connection closed');
+          connectionState = 'failed';
+          stopConnectionMonitoring();
+          break;
+      }
     });
     
-    console.log("Sende Payload:", jsonPayload);
+    // Monitor overall connection state (newer API, more reliable)
+    peerConnection.addEventListener('connectionstatechange', () => {
+      const connState = peerConnection?.connectionState;
+      console.log(`🔗 Overall Connection State: ${connState}`);
+      
+      switch (connState) {
+        case 'connected':
+          connectionState = 'connected';
+          console.log('✅ WebRTC peer connection fully established');
+          break;
+          
+        case 'disconnected':
+          console.warn('⚠️ WebRTC peer connection disconnected');
+          connectionState = 'connecting';
+          showNotification('Connection lost, attempting to reconnect...');
+          break;
+          
+        case 'failed':
+          console.error('❌ WebRTC peer connection failed');
+          connectionState = 'failed';
+          showNotification('Connection failed. Please reload page.');
+          stopConnectionMonitoring();
+          break;
+          
+        case 'closed':
+          console.log('🔒 WebRTC peer connection closed');
+          connectionState = 'failed';
+          stopConnectionMonitoring();
+          break;
+      }
+    });
+    
+    // Optional: Check DataChannel state periodically (lightweight)
+    if (connectionCheckInterval) clearInterval(connectionCheckInterval);
+    connectionCheckInterval = setInterval(() => {
+      checkDataChannelHealth();
+    }, 5000);
+  }
+  
+  // Stop connection monitoring
+  function stopConnectionMonitoring() {
+    console.log('🔗 Stopping WebRTC connection monitoring');
+    
+    if (connectionCheckInterval) {
+      clearInterval(connectionCheckInterval);
+      connectionCheckInterval = null;
+    }
+  }
+  
+  // Simple DataChannel health check (no manual heartbeats!)
+  function checkDataChannelHealth() {
+    if (!dataChannel) {
+      console.warn('No DataChannel available');
+      return;
+    }
+    
+    const readyState = dataChannel.readyState;
+    
+    if (readyState !== 'open') {
+      console.warn(`DataChannel not open: ${readyState}`);
+      
+      if (readyState === 'closed' || readyState === 'closing') {
+        connectionState = 'failed';
+        showNotification('DataChannel closed unexpectedly.');
+        stopConnectionMonitoring();
+      }
+    }
+    
+    // Check for severe congestion (this is still useful)
+    if (dataChannel.bufferedAmount > 10000) { // 10KB threshold
+      console.warn(`DataChannel severely congested: ${dataChannel.bufferedAmount} bytes buffered`);
+      showNotification('Connection experiencing congestion...');
+    }
+  }
+  
+  // Start as initiator (create offer)
+  async function startAsInitiator() {
+    if (!browser) return;
+    
+    isInitiator = true;
+    showOfferAnswer = true;
+    connectionState = 'creating-offer';
+    
+    const pc = initializePeerConnection();
+    if (!pc) return;
+    
+    // Create data channel
+    dataChannel = pc.createDataChannel('chat', {
+      ordered: true
+    });
+    setupDataChannel(dataChannel);
     
     try {
-      if (ws) {
-        ws.send(jsonPayload);
-        console.log("Nachricht erfolgreich gesendet");
+      // Create offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      
+      // Wait for ICE gathering to complete
+      await new Promise<void>((resolve) => {
+        if (pc.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') {
+              resolve();
+            }
+          };
+        }
+      });
+      
+      localOffer = JSON.stringify(pc.localDescription);
+      connectionState = 'waiting-for-answer';
+      showNotification('Offer created! Share it with your peer.');
+      
+      offerCreatedAt = Date.now();
+      startOfferRefresh();
+      
+    } catch (error) {
+      console.error('Error creating offer:', error);
+      connectionState = 'failed';
+      showNotification('Error creating offer');
+    }
+  }
+  
+  // Start as receiver (wait for offer)
+  function startAsReceiver() {
+    isInitiator = false;
+    showOfferAnswer = true;
+    connectionState = 'waiting-for-offer';
+    initializePeerConnection();
+  }
+  
+  // Process received offer and create answer
+  async function processOffer() {
+    if (!peerConnection || !remoteOffer.trim()) return;
+    
+    try {
+      connectionState = 'processing-answer';
+      
+      const offer = JSON.parse(remoteOffer);
+      await peerConnection.setRemoteDescription(offer);
+      
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      
+      // Wait for ICE gathering to complete
+      await new Promise<void>((resolve) => {
+        if (peerConnection!.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          peerConnection!.onicegatheringstatechange = () => {
+            if (peerConnection!.iceGatheringState === 'complete') {
+              resolve();
+            }
+          };
+        }
+      });
+      
+      localAnswer = JSON.stringify(peerConnection.localDescription);
+      connectionState = 'connecting';
+      showNotification('Answer created! Share it with your peer.');
+      
+    } catch (error) {
+      console.error('Error processing offer:', error);
+      connectionState = 'failed';
+      showNotification('Error processing offer');
+    }
+  }
+  
+  // Process received answer
+  async function processAnswer() {
+    if (!peerConnection || !remoteAnswer.trim()) return;
+    
+    try {
+      const answer = JSON.parse(remoteAnswer);
+      await peerConnection.setRemoteDescription(answer);
+      
+      connectionState = 'connecting';
+      showNotification('Answer processed! Connecting...');
+      stopOfferRefresh(); // Stop refresh since we're now connecting
+      
+    } catch (error) {
+      console.error('Error processing answer:', error);
+      connectionState = 'failed';
+      showNotification('Error processing answer');
+      stopOfferRefresh();
+    }
+  }
+  
+  // Send chat message
+  function sendMessage() {
+    if (!dataChannel || dataChannel.readyState !== 'open' || (!messageInput.trim() && !pendingAttachment)) {
+      return;
+    }
+    
+    const messageData = {
+      type: 'chat',
+      nick: config.nick,
+      message: messageInput.trim(),
+      attachment: pendingAttachment,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Add to local messages immediately
+    messages = [...messages, {
+      nick: config.nick,
+      text: messageInput.trim(),
+      timestamp: new Date(),
+      isSelf: true,
+      attachment: pendingAttachment || undefined
+    }];
+    
+    // Send via data channel
+    try {
+      const messageJson = JSON.stringify(messageData);
+      
+      // If message is small enough, send directly
+      if (messageJson.length <= 15000) {
+        dataChannel.send(messageJson);
+        console.log('Message sent directly:', messageData);
+      } 
+      // If message is too large (due to attachment), send in chunks
+      else if (pendingAttachment && pendingAttachment.data) {
+        sendLargeFileInChunks(messageData, pendingAttachment);
+      } 
+      else {
+        showNotification('Message too large to send');
+      return;
       }
     } catch (error) {
-      console.error("Fehler beim Senden der Nachricht:", error);
-      showNotification($t('messageError'));
+      console.error('Error sending message:', error);
+      showNotification('Error sending message: ' + error);
     }
+    
+    // Clear input
+    messageInput = '';
+    pendingAttachment = null;
+    scrollToBottom();
+  }
+  
+  // Send large files by chunking the base64 data
+  function sendLargeFileInChunks(messageData: any, attachment: FileAttachment) {
+    if (!dataChannel || !attachment.data) return;
+    
+    console.log('Sending large file in chunks:', attachment.name);
+    
+    // Calculate chunk size for base64 data (leave room for JSON overhead)
+    const maxDataPerChunk = 12000; // ~12KB of base64 data per chunk
+    const base64Data = attachment.data;
+    const totalChunks = Math.ceil(base64Data.length / maxDataPerChunk);
+    
+    // Send file metadata first
+    const metadataMessage = {
+      type: 'file-start',
+      nick: messageData.nick,
+      message: messageData.message,
+      attachment: {
+        ...attachment,
+        data: undefined, // Don't send data in metadata
+        totalChunks: totalChunks
+      },
+      timestamp: messageData.timestamp
+    };
+    
+    dataChannel.send(JSON.stringify(metadataMessage));
+    console.log(`Starting file transfer: ${attachment.name} (${totalChunks} chunks)`);
+    
+    // Send chunks
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * maxDataPerChunk;
+      const end = Math.min(start + maxDataPerChunk, base64Data.length);
+      const chunkData = base64Data.slice(start, end);
+      
+      const chunkMessage = {
+        type: 'file-chunk',
+        attachmentId: attachment.id,
+        chunkIndex: i,
+        totalChunks: totalChunks,
+        data: chunkData,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Send chunk with small delay to avoid overwhelming
+      setTimeout(() => {
+        if (dataChannel && dataChannel.readyState === 'open') {
+          dataChannel.send(JSON.stringify(chunkMessage));
+          console.log(`Sent chunk ${i + 1}/${totalChunks} for ${attachment.name}`);
+        }
+      }, i * 50); // 50ms delay between chunks
+    }
+    
+    showNotification(`Sending file: ${attachment.name} (${totalChunks} chunks)`);
+  }
+  
+  // Copy text to clipboard
+  async function copyToClipboard(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      showNotification('Copied to clipboard!');
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      showNotification('Failed to copy');
+    }
+  }
+  
+  // Reset connection
+  function resetConnection() {
+    if (peerConnection) {
+      peerConnection.close();
+      peerConnection = null;
+    }
+    if (dataChannel) {
+      dataChannel.close();
+      dataChannel = null;
+    }
+    
+    stopOfferRefresh(); // Stop any running offer refresh
+    
+    connectionState = 'disconnected';
+    showOfferAnswer = false;
+    localOffer = '';
+    remoteAnswer = '';
+    remoteOffer = '';
+    localAnswer = '';
+    offerCreatedAt = 0;
+    messages = [];
+    incomingFiles = {};
+    
+    // No more manual heartbeat tracking needed - using native WebRTC monitoring
   }
   
   function handleKeydown(event: KeyboardEvent) {
@@ -381,43 +856,11 @@
     }
   }
   
-  function disconnect() {
-    if (ws) {
-      ws.close(1000, "Deliberate disconnection");
-      ws = null;
-    }
-    
-    if (reconnectInterval) {
-      clearTimeout(reconnectInterval);
-      reconnectInterval = null;
-    }
-    
-    connectionStatus = $t('wsDisconnected');
-    peerConnectionStatus = $t('peerNoConnection');
-  }
-  
-  function isWsOpen(websocket: WebSocket | null): boolean {
-    if (!browser || !websocket) return false;
-    const isOpen = websocket.readyState === WebSocket.OPEN;
-    console.log("isWsOpen prüft:", isOpen, "readyState:", websocket.readyState, "WebSocket.OPEN:", WebSocket.OPEN);
-    return isOpen;
-  }
-  
   function showNotification(message: string) {
     notification = message;
     setTimeout(() => {
       notification = '';
-    }, 1500);
-  }
-  
-  function copyUdpInfo() {
-    if (udpConnectionInfo) {
-      navigator.clipboard.writeText(udpConnectionInfo).then(() => {
-        showNotification($t('infoCopied'));
-      }).catch(err => {
-        console.error('Fehler beim Kopieren:', err);
-      });
-    }
+    }, 3000);
   }
   
   function startResize(event: MouseEvent) {
@@ -430,7 +873,7 @@
   
   function resize(event: MouseEvent) {
     if (isDragging) {
-      const newWidth = Math.max(150, Math.min(400, event.clientX));
+      const newWidth = Math.max(200, Math.min(500, event.clientX));
       configWidth = newWidth;
     }
   }
@@ -446,174 +889,310 @@
     showConfig = !showConfig;
   }
   
-  $: if (browser && config.proxy && config.proxy.split(':').length > 1) {
-    fetchWebSocketInfo();
-  }
-  
   $: if (messages.length) {
-    setTimeout(scrollToBottom, 10);
+    scrollToBottom();
   }
   
-  interface StructuredMessage {
-    version: number;
-    original: string;
-    attachment?: FileAttachment;
-    isAttachmentChunk?: boolean;
-    attachmentChunk?: AttachmentChunk;
-  }
-  
-  function createStructuredMessage(original: string, translation?: string, targetLang?: string, attachment?: FileAttachment | null, chunk?: AttachmentChunk): string {
-    const safeOriginal = sanitizeForJson(original);
+  // Start automatic offer refresh to keep NAT ports alive
+  function startOfferRefresh() {
+    console.log('Starting automatic offer refresh (every 45s) to prevent NAT timeouts');
     
-    const structured: StructuredMessage = {
-      version: 1,
-      original: safeOriginal
-    };
-    
-    if (attachment) {
-      structured.attachment = attachment;
+    if (offerRefreshInterval) {
+      clearInterval(offerRefreshInterval);
     }
     
-    if (chunk) {
-      structured.isAttachmentChunk = true;
-      structured.attachmentChunk = chunk;
-    }
-    
-    const result = JSON.stringify(structured);
-    console.log("Erstellte strukturierte Nachricht:", result);
-    return result;
+    offerRefreshInterval = setInterval(async () => {
+      if (connectionState === 'waiting-for-answer' && peerConnection) {
+        const ageInSeconds = (Date.now() - offerCreatedAt) / 1000;
+        console.log(`Refreshing offer after ${ageInSeconds.toFixed(0)}s to prevent NAT timeout`);
+        
+        try {
+          // Create fresh offer with new ICE candidates
+          const offer = await peerConnection.createOffer();
+          await peerConnection.setLocalDescription(offer);
+          
+          // Wait for ICE gathering to complete
+          await new Promise<void>((resolve) => {
+            if (peerConnection!.iceGatheringState === 'complete') {
+              resolve();
+      } else {
+              peerConnection!.onicegatheringstatechange = () => {
+                if (peerConnection!.iceGatheringState === 'complete') {
+                  resolve();
+                }
+              };
+            }
+          });
+          
+          localOffer = JSON.stringify(peerConnection.localDescription);
+          offerCreatedAt = Date.now();
+          showNotification('Offer refreshed! Please share the new offer.');
+          
+        } catch (error) {
+          console.error('Error refreshing offer:', error);
+        }
+      }
+    }, 45000); // Refresh every 45 seconds
   }
   
-  function parseStructuredMessage(content: string): StructuredMessage | null {
-    if (!content || content.trim() === '') {
-      console.log("Leerer Content, nichts zu parsen");
-      return null;
+  // Stop offer refresh
+  function stopOfferRefresh() {
+    if (offerRefreshInterval) {
+      clearInterval(offerRefreshInterval);
+      offerRefreshInterval = null;
+      console.log('Stopped automatic offer refresh');
+    }
+  }
+  
+  // Handle page visibility changes - simplified version (native WebRTC monitoring)
+  function handleVisibilityChange() {
+    if (!browser) return;
+    
+    const wasVisible = isTabVisible;
+    isTabVisible = !document.hidden;
+    
+    if (wasVisible && !isTabVisible) {
+      console.log('🔄 Tab went to background - native WebRTC monitoring continues');
+    } else if (!wasVisible && isTabVisible) {
+      console.log('✅ Tab back to foreground - native WebRTC monitoring active');
+    }
+  }
+  
+  // Setup page visibility monitoring - simplified
+  function setupVisibilityMonitoring() {
+    if (!browser) return;
+    
+    // Initial state
+    isTabVisible = !document.hidden;
+    
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    console.log('📡 Page visibility monitoring enabled');
+  }
+  
+  // WASM heartbeat functions - now simplified since we use native WebRTC monitoring
+  async function initializeWasmHeartbeat() {
+    console.log('🔗 Using native WebRTC connection monitoring instead of WASM heartbeat');
+    return false; // Always return false to use native monitoring
+  }
+  
+  // Start WebAssembly heartbeat system - no longer needed, using native WebRTC monitoring
+  function startWasmHeartbeat() {
+    console.log('🔗 Using native WebRTC connection monitoring instead of WASM heartbeat');
+    // WASM heartbeat is no longer needed - WebRTC handles connection monitoring natively
+  }
+  
+  // Stop WebAssembly heartbeat system
+  function stopWasmHeartbeat() {
+    console.log('🔗 Native WebRTC connection monitoring active');
+    // No action needed - using native WebRTC connection state monitoring
+  }
+  
+  // Handle incoming messages (no heartbeat handling needed anymore)
+  function handleIncomingMessage(data: any) {
+    if (data.type === 'chat') {
+      messages = [...messages, {
+        nick: data.nick,
+        text: data.message,
+        timestamp: new Date(),
+        isSelf: false,
+        attachment: data.attachment
+      }];
+      
+      // Show desktop notification if tab is in background
+      showDesktopNotification(data.nick, data.message, !!data.attachment);
+      
+      scrollToBottom();
+    } else if (data.type === 'file-start') {
+      // Handle file-start - create a new message with incomplete attachment
+      const messageIndex = messages.length;
+      messages = [...messages, {
+        nick: data.nick,
+        text: data.message,
+        timestamp: new Date(),
+        isSelf: false,
+        attachment: { ...data.attachment, complete: false }
+      }];
+      
+      // Show notification for file start
+      showDesktopNotification(data.nick, data.message || 'Started sending a file', true);
+      
+      // Initialize file reception tracking
+      incomingFiles[data.attachment.id] = {
+        messageIndex,
+        chunks: new Array(data.attachment.totalChunks),
+        totalChunks: data.attachment.totalChunks,
+        attachment: data.attachment
+      };
+      
+      console.log(`Started receiving file: ${data.attachment.name} (${data.attachment.totalChunks} chunks)`);
+      scrollToBottom();
+    } else if (data.type === 'file-chunk') {
+      // Handle file-chunk - collect chunks and update the message when complete
+      const incomingFile = incomingFiles[data.attachmentId];
+      if (!incomingFile) {
+        console.warn('Received chunk for unknown file:', data.attachmentId);
+        return;
+      }
+      
+      // Store the chunk
+      incomingFile.chunks[data.chunkIndex] = data.data;
+      
+      // Check if all chunks are received
+      const receivedChunks = incomingFile.chunks.filter(chunk => chunk !== undefined).length;
+      console.log(`Received chunk ${receivedChunks}/${incomingFile.totalChunks} for file ${incomingFile.attachment.name}`);
+      
+      // Update message to show progress
+      messages = messages.map((msg, i) => {
+        if (i === incomingFile.messageIndex) {
+          return {
+            ...msg,
+            attachment: {
+              ...incomingFile.attachment,
+              complete: false,
+              name: `${incomingFile.attachment.name} (${receivedChunks}/${incomingFile.totalChunks})`
+            }
+          };
+        }
+        return msg;
+      });
+      
+      // If all chunks received, reassemble the file
+      if (receivedChunks === incomingFile.totalChunks) {
+        const completeData = incomingFile.chunks.join('');
+        
+        // Update the message with complete attachment
+        messages = messages.map((msg, i) => {
+          if (i === incomingFile.messageIndex) {
+            return {
+              ...msg,
+              attachment: {
+                ...incomingFile.attachment,
+                data: completeData,
+                complete: true
+              }
+            };
+          }
+          return msg;
+        });
+        
+        delete incomingFiles[data.attachmentId];
+        console.log(`File received completely: ${incomingFile.attachment.name}`);
+        
+        // Show notification when file is complete (only if tab is in background)
+        if (!isTabVisible && notificationsEnabled) {
+          showNotification(`📎 File received: ${incomingFile.attachment.name}`);
+        }
+        
+        scrollToBottom();
+      }
+    }
+  }
+  
+  // Request notification permission
+  async function requestNotificationPermission() {
+    if (!browser || !('Notification' in window)) {
+      console.log('Browser does not support notifications');
+      return false;
+    }
+    
+    if (Notification.permission === 'granted') {
+      notificationsEnabled = true;
+      return true;
+    }
+    
+    if (Notification.permission === 'default') {
+      try {
+        const permission = await Notification.requestPermission();
+        notificationsEnabled = permission === 'granted';
+        
+        if (notificationsEnabled) {
+          showNotification('🔔 Desktop notifications enabled!');
+        } else {
+          showNotification('⚠️ Desktop notifications blocked');
+        }
+        
+        return notificationsEnabled;
+      } catch (error) {
+        console.error('Error requesting notification permission:', error);
+        return false;
+      }
+    }
+    
+    return false;
+  }
+  
+  // Show desktop notification for new messages
+  function showDesktopNotification(senderNick: string, messageText: string, hasAttachment: boolean = false) {
+    if (!notificationsEnabled || !browser || isTabVisible) {
+      return; // Don't show if notifications disabled, not in browser, or tab is visible
     }
     
     try {
-      console.log("Vollständiger zu parsender Inhalt:", content);
+      const title = `💬 New message from ${senderNick}`;
+      let body = messageText;
       
-      let contentToParse = content.trim();
-      
-      if (contentToParse.startsWith('"') && contentToParse.endsWith('"')) {
-        contentToParse = contentToParse.slice(1, -1);
-        console.log("Quotes entfernt:", contentToParse);
+      if (hasAttachment && !messageText.trim()) {
+        body = '📎 Sent a file';
+      } else if (hasAttachment && messageText.trim()) {
+        body = `${messageText} 📎`;
       }
       
-      if (contentToParse.includes('\\"')) {
-        contentToParse = contentToParse.replace(/\\"/g, '"');
-        console.log("Unescaped Content:", contentToParse);
+      // Limit body length for better display
+      if (body.length > 100) {
+        body = body.substring(0, 97) + '...';
       }
       
-      if (!contentToParse.startsWith('{') || !contentToParse.endsWith('}')) {
-        console.log("Kein JSON-Objekt Format:", contentToParse);
-        return null;
-      }
+      const notificationOptions: NotificationOptions = {
+        body: body,
+        icon: '/favicon.png', // Use your app's favicon
+        badge: '/favicon.png',
+        tag: 'p2pchat-message', // Prevents spam by replacing previous notifications
+        requireInteraction: false,
+        silent: false
+      };
       
-      try {
-        console.log("Versuche direktes Parsen von:", contentToParse);
-        const parsed = JSON.parse(contentToParse);
-        console.log("Erfolgreich geparst als:", parsed);
-        
-        if (parsed && typeof parsed === 'object' && 'version' in parsed && 'original' in parsed) {
-          console.log("Gültige strukturierte Nachricht erkannt mit Originaltext:", parsed.original);
-          return parsed as StructuredMessage;
-        }
-        
-        console.log("Keine gültige strukturierte Nachricht (fehlende Felder)");
-        return null;
-      } catch (directParseError) {
-        console.error("Direktes Parsen fehlgeschlagen:", directParseError);
-        
-        try {
-          const startIndex = contentToParse.indexOf('{');
-          const endIndex = contentToParse.lastIndexOf('}');
-          
-          if (startIndex >= 0 && endIndex > startIndex) {
-            const cleanedJson = contentToParse.substring(startIndex, endIndex + 1);
-            console.log("Bereinigter JSON-String:", cleanedJson);
-            
-            const parsed = JSON.parse(cleanedJson);
-            console.log("Geparst nach Bereinigung:", parsed);
-            
-            if (parsed && typeof parsed === 'object' && 'version' in parsed && 'original' in parsed) {
-              console.log("Gültige strukturierte Nachricht nach Bereinigung:", parsed);
-              return parsed as StructuredMessage;
-            }
-          }
-        } catch (cleanupError) {
-          console.error("Auch bereinigtes Parsen fehlgeschlagen:", cleanupError);
-        }
-        
-        return null;
-      }
-    } catch (e) {
-      console.error("Fehler beim Parsen der strukturierten Nachricht:", e);
-      console.log("Content, der den Fehler verursachte:", content);
-      return null;
-    }
-  }
-  
-  function updateMessage(index: number, updatedMessage: Partial<typeof messages[0]>) {
-    messages = messages.map((msg, i) => {
-      if (i === index) {
-        return { ...msg, ...updatedMessage };
-      }
-      return msg;
-    });
-  }
-  
-  function sanitizeForJson(text: string): string {
-    return text.replace(/"/g, "'");
-  }
-  
-  function handleStructuredMessage(nick: string, structuredMessage: StructuredMessage, messageIndex: number) {
-    console.log("Strukturierte Nachricht erkannt:", structuredMessage);
-    
-    const originalText = structuredMessage.original;
-    
-    updateMessage(messageIndex, {
-      text: originalText
-    });
-    
-    setTimeout(scrollToBottom, 10);
-  }
-  
-  function handleAttachmentChunk(nick: string, chunk: AttachmentChunk) {
-    const { attachmentId, chunkIndex, totalChunks, data } = chunk;
-    
-    if (!incomingAttachments[attachmentId]) {
-      console.warn(`Chunk empfangen für unbekannten Anhang ${attachmentId}`);
-      return;
-    }
-    
-    incomingAttachments[attachmentId].chunks.push(chunk);
-    
-    console.log(`Chunk ${chunkIndex + 1}/${totalChunks} empfangen für Anhang ${attachmentId}`);
-    
-    if (incomingAttachments[attachmentId].chunks.length === totalChunks) {
-      const { attachment, chunks, messageIndex } = incomingAttachments[attachmentId];
+      const desktopNotification = new Notification(title, notificationOptions);
       
-      const completeAttachment = reassembleChunks(attachment, chunks);
+      // Focus window when notification is clicked
+      desktopNotification.onclick = () => {
+        window.focus();
+        desktopNotification.close();
+      };
       
-      updateMessage(messageIndex, {
-        attachment: completeAttachment,
-        pendingChunks: false
-      });
+      // Auto-close after 5 seconds
+      setTimeout(() => {
+        desktopNotification.close();
+      }, 5000);
       
-      console.log(`Anhang ${attachmentId} vollständig empfangen`);
+      console.log(`🔔 Desktop notification shown: ${title}`);
       
-      delete incomingAttachments[attachmentId];
-      
-      setTimeout(scrollToBottom, 10);
+    } catch (error) {
+      console.error('Error showing desktop notification:', error);
     }
   }
   
   onMount(() => {
-    fetchWebSocketInfo();
+    // Initialize backend integration first
+    initializeBackend();
+    
+    // Initialize background throttling countermeasures
+    setupVisibilityMonitoring();
+    
+    // Check notification permissions on startup
+    if (browser && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        notificationsEnabled = true;
+        console.log('🔔 Desktop notifications are available');
+      } else {
+        console.log('🔔 Desktop notifications need permission');
+      }
+    }
     
     return () => {
-      disconnect();
+      resetConnection();
+      stopOfferRefresh();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('mousemove', resize);
       document.removeEventListener('mouseup', stopResize);
     };
@@ -621,82 +1200,312 @@
 </script>
 
 <main class={isDarkMode ? 'dark' : 'light'}>
-  <div class="container">
-    <div class="burger-menu" on:click={toggleConfig}>
+  <!-- Loading overlay for account package fetching -->
+  {#if isLoadingAccountPackage}
+    <div class="loading-overlay">
+      <div class="loading-content">
+        <div class="spinner"></div>
+        <p>Fetching account package...</p>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Account creation modal -->
+  {#if showAccountCreation}
+    <div class="modal-overlay">
+      <div class="modal-content">
+        <h2>Create Account Package</h2>
+        <p>No account package found. Would you like to create one?</p>
+        
+        <form on:submit|preventDefault={handleAccountCreation}>
+          <div class="input-group">
+            <label for="create-username">Username</label>
+            <input 
+              id="create-username"
+              bind:value={accountCreationForm.username}
+              placeholder="Enter your username"
+              required
+            >
+          </div>
+          
+          <div class="input-group">
+            <label for="create-profile-image">Profile Image (datamap address)</label>
+            <input 
+              id="create-profile-image"
+              bind:value={accountCreationForm.profileImage}
+              placeholder="Optional: datamap address for profile image"
+            >
+            {#if accountCreationForm.profileImage && backendUrl}
+              <div class="profile-image-preview">
+                <img 
+                  src="{backendUrl}/ant-0/data/{accountCreationForm.profileImage}"
+                  alt="Profile preview"
+                  on:error={() => {
+                    showNotification('Failed to load profile image');
+                  }}
+                />
+              </div>
+            {/if}
+          </div>
+          
+          {#if accountCreationError}
+            <div class="error-message">{accountCreationError}</div>
+          {/if}
+          
+          <div class="modal-buttons">
+            <button type="button" on:click={cancelAccountCreation} class="secondary-button">
+              Cancel
+            </button>
+            <button type="submit" class="primary-button" disabled={isLoadingAccountPackage}>
+              {isLoadingAccountPackage ? 'Creating...' : 'Create Account'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+
+  <div class="container" class:blurred={isLoadingAccountPackage}>
+    <div class="burger-menu" on:click={toggleConfig} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && toggleConfig()}>
       ☰
     </div>
 
     {#if showConfig}
       <div class="config" style="width: {configWidth}px;">
-        <h2>{$t('settings')}</h2>
-        <LanguageSelector />
+        <h2>Settings</h2>
+        
+        <!-- Account Package Info -->
+        {#if accountPackage}
+          <div class="account-package-info">
+            <h3>Account Package</h3>
+            <div class="account-details">
+              <div class="account-field">
+                <strong>Username:</strong> {accountPackage.username}
+              </div>
+              {#if accountPackage.profileImage}
+                <div class="account-field">
+                  <strong>Profile Image:</strong>
+                  <div class="profile-image-display">
+                    <img 
+                      src="{backendUrl}/ant-0/data/{accountPackage.profileImage}"
+                      alt="Profile"
+                      on:error={() => {
+                        showNotification('Failed to load profile image');
+                      }}
+                    />
+                    <span class="datamap-address">{accountPackage.profileImage}</span>
+                  </div>
+                </div>
+              {/if}
+              {#if backendUrl}
+                <div class="account-field">
+                  <strong>Backend:</strong> {backendUrl}
+                </div>
+              {/if}
+            </div>
+          </div>
+        {:else if backendUrl}
+          <div class="account-package-info">
+            <h3>Account Package</h3>
+            <p class="no-account">No account package configured</p>
+            <button on:click={() => showAccountCreation = true} class="primary-button">
+              Create Account Package
+            </button>
+          </div>
+        {/if}
+
+        <!-- User Profile Display -->
+        {#if accountPackage}
+          <div class="user-profile">
+            <div class="profile-header">
+              {#if accountPackage.profileImage && backendUrl}
+                <img 
+                  src="{backendUrl}/ant-0/data/{accountPackage.profileImage}"
+                  alt="Profile"
+                  class="profile-avatar"
+                  on:error={() => {
+                    showNotification('Failed to load profile image');
+                  }}
+                />
+              {:else}
+                <div class="profile-avatar-placeholder">
+                  {accountPackage.username.charAt(0).toUpperCase()}
+                </div>
+              {/if}
+              <div class="profile-info">
+                <h3 class="profile-name">{accountPackage.username}</h3>
+                <p class="profile-status">Connected via account package</p>
+              </div>
+            </div>
+          </div>
+        {:else}
+          <div class="input-group">
+            <label for="nick">Nickname</label>
+            <input id="nick" bind:value={config.nick} placeholder="Your Name">
+            {#if backendUrl}
+              <small class="help-text">Will be replaced when account package is loaded</small>
+            {/if}
+          </div>
+        {/if}
+        
         <div class="input-group">
-          <label for="proxy">{$t('proxy')}</label>
-          <input id="proxy" bind:value={config.proxy} placeholder="127.0.0.1:17017">
-        </div>
-        <div class="input-group">
-          <label for="target">{$t('partner')}</label>
-          <input id="target" bind:value={config.target} placeholder="0.0.0.0:17171">
-        </div>
-        <div class="input-group">
-          <label for="encryptionKey">{$t('encryptionKey')}</label>
-          <input id="encryptionKey" bind:value={config.encryptionKey} placeholder="1234567890" type="password">
-        </div>
-        <div class="input-group">
-          <label for="nick">{$t('nickname')}</label>
-          <input id="nick" bind:value={config.nick} placeholder="rid">
-        </div>
-        <div class="input-group">
-          <label for="theme">{$t('theme')}</label>
-          <select id="theme" on:change={(e: Event) => {
+          <label for="theme">Theme</label>
+          <select id="theme" on:change={(e) => {
             const target = e.target as HTMLSelectElement;
             toggleTheme(target.value === 'true');
           }}>
-            <option value="false" selected={!isDarkMode}>{$t('lightMode')}</option>
-            <option value="true" selected={isDarkMode}>{$t('darkMode')}</option>
+            <option value="false" selected={!isDarkMode}>Light</option>
+            <option value="true" selected={isDarkMode}>Dark</option>
           </select>
         </div>
+        
+        <!-- Desktop Notifications Section -->
+        <div class="notification-section">
+          <h3>Desktop Notifications</h3>
+          <div class="notification-status">
+            {#if !browser || !('Notification' in window)}
+              <span class="status-text">❌ Not supported in this browser</span>
+            {:else if Notification.permission === 'granted'}
+              <span class="status-text">✅ Enabled</span>
+              <p class="help-text">You'll get notifications for new messages when this tab is in the background.</p>
+            {:else if Notification.permission === 'denied'}
+              <span class="status-text">🚫 Blocked</span>
+              <p class="help-text">Please enable notifications in your browser settings.</p>
+            {:else}
+              <span class="status-text">⚪ Not enabled</span>
+              <p class="help-text">Get desktop notifications for new messages when this tab is in the background.</p>
+              <button on:click={requestNotificationPermission} class="primary-button notification-button">
+                Enable Notifications
+              </button>
+            {/if}
+          </div>
+        </div>
+        
+        <div class="connection-section">
+          <h3>WebRTC Connection</h3>
+          
+          <div class="connection-status">
+            <span class="status-indicator status-{connectionState}"></span>
+            <span class="status-text">
+              {#if connectionState === 'disconnected'}
+                Disconnected
+              {:else if connectionState === 'creating-offer'}
+                Creating offer...
+              {:else if connectionState === 'waiting-for-answer'}
+                Waiting for answer
+              {:else if connectionState === 'waiting-for-offer'}
+                Waiting for offer
+              {:else if connectionState === 'processing-answer'}
+                Processing answer...
+              {:else if connectionState === 'connecting'}
+                Connecting...
+              {:else if connectionState === 'connected'}
+                Connected
+              {:else if connectionState === 'failed'}
+                Connection failed
+              {/if}
+            </span>
+          </div>
+          
+          {#if connectionState === 'disconnected' || connectionState === 'failed'}
         <div class="button-group">
-          <button
-            on:click={connect}
-            disabled={!browser || isWsOpen(ws)}
-            class="connect-button"
-          >
-            {!browser ? $t('loading') : (isWsOpen(ws) ? $t('connected') : $t('connect'))}
+              <button on:click={startAsInitiator} class="primary-button">
+                Start Call
           </button>
-          <button
-            on:click={disconnect}
-            disabled={!browser || !ws}
-            class="disconnect-button"
-          >
-            {$t('disconnect')}
+              <button on:click={startAsReceiver} class="secondary-button">
+                Receive Call
           </button>
         </div>
+          {:else if connectionState === 'connected'}
+            <button on:click={resetConnection} class="danger-button">
+              Disconnect
+            </button>
+          {/if}
+            </div>
+            
+        {#if showOfferAnswer}
+          <div class="offer-answer-section">
+            <h3>Connection Setup</h3>
+            
+            {#if isInitiator}
+              {#if localOffer}
+                <div class="step-section">
+                  <h4>Step 1: Share your offer</h4>
+                  <div class="code-block">
+                    <textarea readonly bind:value={localOffer} rows="6"></textarea>
+                    <button on:click={() => copyToClipboard(localOffer)} class="copy-button">
+                      Copy
+                    </button>
+            </div>
+            
+                  {#if connectionState === 'waiting-for-answer'}
+                    <div class="offer-refresh-info">
+                      <small>💡 Offer will auto-refresh every 45s to prevent NAT timeouts</small>
+            </div>
+                  {/if}
+                </div>
+              {/if}
+              
+              {#if connectionState === 'waiting-for-answer'}
+                <div class="step-section">
+                  <h4>Step 2: Paste the answer you received</h4>
+                  <div class="input-group">
+                    <textarea bind:value={remoteAnswer} rows="6" placeholder="Paste answer here..."></textarea>
+                    <button on:click={processAnswer} disabled={!remoteAnswer.trim()} class="primary-button">
+                      Process Answer
+                    </button>
+                  </div>
+                </div>
+              {/if}
+            {:else}
+              <div class="step-section">
+                <h4>Step 1: Paste the offer you received</h4>
+                <div class="input-group">
+                  <textarea bind:value={remoteOffer} rows="6" placeholder="Paste offer here..."></textarea>
+                  <button on:click={processOffer} disabled={!remoteOffer.trim()} class="primary-button">
+                    Process Offer
+                  </button>
+                </div>
+            </div>
+            
+              {#if localAnswer}
+                <div class="step-section">
+                  <h4>Step 2: Share your answer</h4>
+                  <div class="code-block">
+                    <textarea readonly bind:value={localAnswer} rows="6"></textarea>
+                    <button on:click={() => copyToClipboard(localAnswer)} class="copy-button">
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                {/if}
+              {/if}
+            </div>
+          {/if}
       </div>
     {/if}
     
-    <div class="resizer" on:mousedown={startResize} style="display: {showConfig ? 'block' : 'none'};"></div>
+    <div class="resizer" on:mousedown={startResize} role="separator" style="display: {showConfig ? 'block' : 'none'};"></div>
     
     <div class="chat">
-      <div class="status">
-        <span class="socket-status">{$t('wsStatus')} {connectionStatus}</span>
-        <div class="udp-info-container">
-          {#if udpConnectionInfo}
-            <span class="udp-info">{$t('meInfo')} {udpConnectionInfo}
-              <button 
-                class="copy-button" 
-                on:click={copyUdpInfo}
-                title={$t('infoCopied')}
-              >
-                📄
-              </button>
-            </span>
-          {/if}
+      <div class="chat-header">
+        <h1>WebRTC P2P Chat</h1>
+        <div class="connection-indicator">
+          <span class="status-dot status-{connectionState}"></span>
+          <span>{connectionState === 'connected' ? 'Connected' : 'Not Connected'}</span>
         </div>
-        <span class="peer-status">{$t('peerStatus')} {peerConnectionStatus}</span>
       </div>
       
       <div class="messages" bind:this={messagesContainer}>
+        {#if messages.length === 0}
+          <div class="empty-chat">
+            <p>No messages yet. Start a conversation!</p>
+            {#if connectionState !== 'connected'}
+              <p class="help-text">Use the connection panel to establish a peer-to-peer connection.</p>
+            {/if}
+          </div>
+        {/if}
+        
         {#each messages as message, i}
           <div class="message {message.isSelf ? 'self' : ''}">
             <div class="message-header">
@@ -704,64 +1513,60 @@
               <span class="time">{message.timestamp.toLocaleTimeString()}</span>
             </div>
             <div class="message-body">
-              {#if message.text}
-                <div class="message-text">{message.text}</div>
-              {/if}
-              
-              {#if message.attachment}
-                <div class="attachment-container">
-                  {#if message.pendingChunks}
-                    <div class="attachment-loading">
-                      <div class="spinner"></div>
-                      <span>{$t('fileReceiving')} {message.attachment.name}</span>
-                    </div>
-                  {:else}
-                    <AttachmentView attachment={message.attachment} />
-                  {/if}
-                </div>
+                {#if message.text}
+                  <div class="message-text">{message.text}</div>
+                {/if}
+                
+                {#if message.attachment}
+                  <div class="attachment-container">
+                      <AttachmentView attachment={message.attachment} />
+                  </div>
               {/if}
             </div>
           </div>
         {/each}
       </div>
       
-      <div class="input">
+      <div class="input-area" class:disabled={connectionState !== 'connected'}>
+        <div class="input-row">
         <textarea
           bind:value={messageInput}
           on:keydown={handleKeydown}
-          placeholder={$t('messagePlaceholder')}
-          disabled={connectionStatus !== $t('wsConnected') || !ws}
+            placeholder={connectionState === 'connected' ? 'Type a message...' : 'Connect first to send messages'}
+            disabled={connectionState !== 'connected'}
+            rows="2"
         ></textarea>
         
-        <div class="attachment-controls">
+          <div class="input-controls">
           <FileUploader 
-            disabled={connectionStatus !== $t('wsConnected') || !ws}
+              disabled={connectionState !== 'connected'}
             on:fileSelected={({detail}) => {
+                console.log('File selected:', detail);
               pendingAttachment = detail.attachment;
-              pendingChunks = detail.chunks || null;
-              showNotification($t('fileSelected') + detail.attachment.name);
+                showNotification('File selected: ' + detail.attachment.name);
             }}
-            on:error={({detail}) => showNotification(detail)}
+              on:error={({detail}) => {
+                console.error('File upload error:', detail);
+                showNotification(detail);
+              }}
           />
           
           {#if pendingAttachment}
             <div class="pending-attachment">
               <span class="attachment-name">{pendingAttachment.name}</span>
-              <button class="remove-attachment" on:click={() => {
-                pendingAttachment = null;
-                pendingChunks = null;
-              }}>✕</button>
+                <button class="remove-attachment" on:click={() => pendingAttachment = null}>✕</button>
             </div>
           {/if}
-        </div>
         
         <button
           on:click={sendMessage}
-          disabled={connectionStatus !== $t('wsConnected') || !ws || (!messageInput.trim() && !pendingAttachment)}
-          class="send-button {messageInput.trim() || pendingAttachment ? 'active' : ''}"
+              disabled={connectionState !== 'connected' || (!messageInput.trim() && !pendingAttachment)}
+              class="send-button {(messageInput.trim() || pendingAttachment) && connectionState === 'connected' ? 'active' : ''}"
         >
-          {$t('send')}
+              Send
         </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -787,7 +1592,7 @@
     box-sizing: border-box;
     padding: 0.5rem;
     gap: 0;
-    font-family: Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
     overflow: hidden;
   }
   
@@ -799,56 +1604,203 @@
     font-size: 1.5rem;
     cursor: pointer;
     z-index: 1000;
+    padding: 0.5rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #ddd;
   }
   
   .config {
-    min-width: 150px;
-    padding: 0.75rem;
-    background: #f5f5f5;
+    min-width: 200px;
+    padding: 1rem;
+    background: #f8f9fa;
     border-radius: 8px 0 0 8px;
     overflow-y: auto;
     max-height: 100%;
     flex-shrink: 0;
+    border: 1px solid #e9ecef;
   }
   
   .input-group {
-    margin-bottom: 0.5rem;
-    margin-right: 0.75rem;
+    margin-bottom: 1rem;
   }
   
   .input-group label {
     display: block;
-    margin-bottom: 0.2rem;
-    font-weight: bold;
-    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #495057;
   }
   
-  .input-group input {
+  .input-group input, .input-group select, .input-group textarea {
     width: 100%;
-    padding: 0.3rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 0.85rem;
+    padding: 0.5rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    background: white;
+    box-sizing: border-box;
+  }
+  
+  .connection-section {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+  }
+  
+  .connection-section h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: #212529;
+  }
+  
+  .connection-status {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+  }
+  
+  .status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+    flex-shrink: 0;
+  }
+  
+  .status-indicator.status-disconnected, .status-dot.status-disconnected { background: #6c757d; }
+  .status-indicator.status-creating-offer, .status-dot.status-creating-offer { background: #ffc107; }
+  .status-indicator.status-waiting-for-answer, .status-dot.status-waiting-for-answer { background: #fd7e14; }
+  .status-indicator.status-waiting-for-offer, .status-dot.status-waiting-for-offer { background: #fd7e14; }
+  .status-indicator.status-processing-answer, .status-dot.status-processing-answer { background: #0dcaf0; }
+  .status-indicator.status-connecting, .status-dot.status-connecting { background: #0d6efd; }
+  .status-indicator.status-connected, .status-dot.status-connected { background: #198754; }
+  .status-indicator.status-failed, .status-dot.status-failed { background: #dc3545; }
+  
+  .status-text {
+    font-size: 0.9rem;
+    font-weight: 500;
   }
   
   .button-group {
     display: flex;
     gap: 0.5rem;
-    margin-top: 0.5rem;
+    flex-wrap: wrap;
   }
   
-  .connect-button, .disconnect-button {
+  .primary-button, .secondary-button, .danger-button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
     flex: 1;
-    font-size: 0.85rem;
-    padding: 0.3rem 0;
+    min-width: 100px;
   }
   
-  .connect-button {
-    background: #4CAF50;
+  .primary-button {
+    background: #0d6efd;
+    color: white;
   }
   
-  .disconnect-button {
-    background: #f44336;
+  .primary-button:hover:not(:disabled) {
+    background: #0b5ed7;
+  }
+  
+  .primary-button:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+  }
+  
+  .secondary-button {
+    background: #6c757d;
+    color: white;
+  }
+  
+  .secondary-button:hover {
+    background: #5c636a;
+  }
+  
+  .danger-button {
+    background: #dc3545;
+    color: white;
+  }
+  
+  .danger-button:hover {
+    background: #bb2d3b;
+  }
+  
+  .offer-answer-section {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+  }
+  
+  .offer-answer-section h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: #212529;
+  }
+  
+  .step-section {
+    margin-bottom: 2rem;
+  }
+  
+  .step-section h4 {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    color: #495057;
+    font-weight: 600;
+  }
+  
+  .code-block {
+    position: relative;
+  }
+  
+  .code-block textarea {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    resize: vertical;
+  }
+  
+  .copy-button {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  
+  .copy-button:hover {
+    background: #0b5ed7;
+  }
+  
+  .offer-refresh-info {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: #e7f3ff;
+    border: 1px solid #b6d7ff;
+    border-radius: 4px;
+    text-align: center;
+  }
+  
+  .offer-refresh-info small {
+    color: #0066cc;
+    font-size: 0.8rem;
   }
   
   .chat {
@@ -857,296 +1809,273 @@
     flex-direction: column;
     background: white;
     border-radius: 0 8px 8px 0;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     height: 100%;
     overflow: hidden;
-    position: relative;
+    border: 1px solid #e9ecef;
   }
   
-  .status {
-    padding: 0.5rem;
-    background: #f5f5f5;
-    border-bottom: 1px solid #ddd;
+  .chat-header {
+    padding: 1rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
     display: flex;
-    flex-direction: column;
     justify-content: space-between;
-    font-size: 0.85rem;
-    padding-left: 2rem;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
   }
   
-  .status > * {
-    margin-bottom: 0.5rem;
+  .chat-header h1 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #212529;
   }
   
-  .udp-info-container {
-    order: -1;
-  }
-  
-  @media (min-width: 800px) {
-    .status {
-      flex-direction: row;
-    }
-    
-    .status > * {
-      margin-bottom: 0;
-    }
-    
-    .udp-info-container {
-      order: 0;
-    }
-  }
-  
-  .socket-status {
-    font-weight: bold;
-    white-space: nowrap;
-  }
-  
-  .udp-info-container {
+  .connection-indicator {
     display: flex;
     align-items: center;
-    justify-content: center;
-    flex: 1;
-    text-align: center;
+    font-size: 0.9rem;
+    color: #495057;
   }
   
-  .udp-info {
-    background-color: #e3f2fd;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-weight: bold;
-    color: #1976d2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
-  
-  .peer-status {
-    font-weight: bold;
-    white-space: nowrap;
-    text-align: left;
-  }
-  
-  .copy-button {
-    background: none;
-    border: none;
-    padding: 0;
-    margin-left: 0.25rem;
-    cursor: pointer;
-    font-size: 1.2rem;
-    color: #666;
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
   }
   
   .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 0.75rem;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 1rem;
     min-height: 0;
-    height: 0;
+  }
+  
+  .empty-chat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    color: #6c757d;
+  }
+  
+  .empty-chat p {
+    margin: 0.5rem 0;
+    font-size: 1.1rem;
+  }
+  
+  .help-text {
+    font-size: 0.9rem !important;
+    color: #adb5bd !important;
   }
   
   .message {
-    background: #f1f1f1;
-    padding: 0.5rem;
-    border-radius: 8px;
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 12px;
     max-width: 80%;
     align-self: flex-start;
+    border: 1px solid #e9ecef;
   }
   
   .message.self {
     align-self: flex-end;
-    background: #dcf8c6;
+    background: #d1ecf1;
+    border-color: #bee5eb;
   }
   
   .message-header {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
   }
   
   .nick {
-    font-weight: bold;
+    font-weight: 600;
+    color: #495057;
   }
   
   .time {
-    font-size: 0.8rem;
-    color: #666;
+    color: #6c757d;
   }
   
   .message-body {
-    white-space: pre-wrap;
     word-break: break-word;
-  }
-  
-  .input {
-    padding: 0.5rem;
-    border-top: 1px solid #ddd;
-    display: flex;
-    gap: 0.5rem;
-    min-height: 50px;
-    max-height: 70px;
-  }
-  
-  textarea {
-    flex: 1;
-    padding: 0.5rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    resize: none;
-    height: auto;
-    min-height: 38px;
-    max-height: 60px;
-    overflow-y: auto;
-  }
-  
-  button {
-    padding: 0.4rem 0.8rem;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  
-  .input button {
-    align-self: center;
-    height: 38px;
-  }
-  
-  button:hover:not(:disabled) {
-    filter: brightness(0.9);
-  }
-  
-  button:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-  }
-
-  .notification {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    background-color: #4CAF50;
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    opacity: 0;
-    transition: opacity 0.3s ease-in-out;
-    z-index: 1000;
-  }
-
-  .notification.visible {
-    opacity: 1;
-  }
-
-  h2 {
-    font-size: 1.2rem;
-    margin-top: 0;
-    margin-bottom: 0.75rem;
-    margin-left: 2rem;
-  }
-  
-  .resizer {
-    width: 5px;
-    background-color: #ddd;
-    cursor: col-resize;
-    transition: background-color 0.2s;
-  }
-  
-  .resizer:hover {
-    background-color: #aaa;
-  }
-
-  .send-button {
-    background-color: #9e9e9e;
-    transition: background-color 0.2s;
-  }
-  
-  .send-button.active {
-    background-color: #2196F3;
-  }
-
-  @media (max-width: 800px) {
-    .burger-menu {
-      display: block;
-    }
-
-    .config {
-      display: none;
-    }
   }
   
   .message-text {
-    margin-bottom: 0.5rem;
+    line-height: 1.4;
     white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.2;
   }
   
   .attachment-container {
-    margin-top: 0.5rem;
-    border-top: 1px solid #f0f0f0;
-    padding-top: 0.5rem;
+    margin-top: 0.75rem;
+    border-top: 1px solid #dee2e6;
+    padding-top: 0.75rem;
   }
   
-  .attachment-loading {
+  .input-area {
+    padding: 1rem;
+    border-top: 1px solid #dee2e6;
+    background: #f8f9fa;
+  }
+  
+  .input-area.disabled {
+    opacity: 0.6;
+  }
+  
+  .input-row {
     display: flex;
-    align-items: center;
-    padding: 0.5rem;
-    background-color: #f9f9f9;
-    border: 1px dashed #ccc;
-    border-radius: 4px;
+    gap: 1rem;
+    align-items: flex-end;
   }
   
-  .attachment-loading .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid #f3f3f3;
-    border-top: 2px solid #3498db;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-right: 0.75rem;
+  .input-row textarea {
+    flex: 1;
+    padding: 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    resize: none;
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.4;
   }
   
-  .attachment-controls {
+  .input-controls {
     display: flex;
-    align-items: center;
-    margin-right: 0.5rem;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-end;
   }
   
   .pending-attachment {
     display: flex;
     align-items: center;
-    margin-left: 0.5rem;
-    background-color: #e8f4fc;
-    border-radius: 4px;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.8rem;
+    background: #e7f3ff;
+    border: 1px solid #b6d7ff;
+    border-radius: 6px;
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    max-width: 200px;
   }
   
   .attachment-name {
-    max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    margin-right: 0.5rem;
   }
   
   .remove-attachment {
     background: none;
     border: none;
-    color: #666;
+    color: #6c757d;
     cursor: pointer;
-    font-size: 0.8rem;
-    padding: 0 0 0 0.35rem;
+    font-size: 1rem;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+  .send-button {
+    padding: 0.75rem 1.5rem;
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+  
+  .send-button.active {
+    background: #0d6efd;
+  }
+  
+  .send-button:hover:not(:disabled) {
+    filter: brightness(0.9);
+  }
+  
+  .send-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  
+  .resizer {
+    width: 5px;
+    background-color: #dee2e6;
+    cursor: col-resize;
+    transition: background-color 0.2s;
+  }
+  
+  .resizer:hover {
+    background-color: #adb5bd;
+  }
+  
+  .notification {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    background: #198754;
+    color: white;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    z-index: 1000;
+    max-width: 300px;
+  }
+  
+  .notification.visible {
+    opacity: 1;
+  }
+  
+  h2 {
+    font-size: 1.1rem;
+    margin: 0 0 1rem 0;
+    color: #212529;
+    font-weight: 600;
+  }
+  
+  @media (max-width: 768px) {
+    .container {
+      padding: 0.25rem;
+    }
+    
+    .burger-menu {
+      top: 0.25rem;
+      left: 0.25rem;
+    }
+    
+    .input-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    
+    .input-controls {
+      flex-direction: row;
+      justify-content: space-between;
+    align-items: center;
+    }
+    
+    .chat-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 
   /* Dark mode styles */
@@ -1154,61 +2083,473 @@
     background-color: #121212;
     color: #ffffff;
   }
+  
   .dark .container {
     background-color: #1e1e1e;
   }
-  .dark .message {
-    background-color: #2e2e2e;
-  }
-  .dark .message.self {
-    background-color: #3e3e3e;
-  }
+  
   .dark .config {
-    background-color: #1e1e1e;
+    background-color: #2d2d2d;
+    border-color: #404040;
   }
-  .dark .status {
-    background-color: #1e1e1e;
-  }
-  .dark .input {
-    background-color: #1e1e1e;
-  }
-  .dark textarea {
-    background-color: #2e2e2e;
-    color: #ffffff;
-  }
-  .dark button {
-    background-color: #3e3e3e;
-    color: #ffffff;
-  }
-  .dark .notification {
-    background-color: #333333;
-  }
-  .dark .attachment-loading {
-    background-color: #2e2e2e;
-  }
-  .dark .pending-attachment {
-    background-color: #2e2e2e;
-  }
-  .dark .udp-info {
-    background-color: #333333;
-  }
-  .dark .peer-status {
-    color: #ffffff;
-  }
-  .dark .socket-status {
-    color: #ffffff;
-  }
+  
   .dark .burger-menu {
+    background: rgba(45, 45, 45, 0.9);
+    border-color: #404040;
     color: #ffffff;
   }
-  .dark .copy-button {
-    color: #ffffff;
-  }
-  .dark .input-group input {
-    background-color: #2e2e2e;
-    color: #ffffff;
-  }
+  
   .dark .chat {
+    background-color: #2d2d2d;
+    border-color: #404040;
+  }
+  
+  .dark .chat-header {
     background-color: #1e1e1e;
+    border-color: #404040;
+  }
+  
+  .dark .chat-header h1 {
+    color: #ffffff;
+  }
+  
+  .dark .connection-indicator {
+    color: #b0b0b0;
+  }
+  
+  .dark .message {
+    background-color: #404040;
+    border-color: #505050;
+  }
+  
+  .dark .message.self {
+    background-color: #1a4c5c;
+    border-color: #2a5c6c;
+  }
+  
+  .dark .input-area {
+    background-color: #1e1e1e;
+    border-color: #404040;
+  }
+  
+  .dark .input-group input,
+  .dark .input-group select,
+  .dark .input-group textarea,
+  .dark .input-row textarea {
+    background-color: #404040;
+    border-color: #505050;
+    color: #ffffff;
+  }
+  
+  .dark .connection-status {
+    background-color: #404040;
+    border-color: #505050;
+  }
+  
+  .dark .code-block textarea {
+    background-color: #1e1e1e;
+    border-color: #404040;
+    color: #ffffff;
+  }
+  
+  .dark .pending-attachment {
+    background-color: #2d4a5c;
+    border-color: #3a5a6c;
+    color: #ffffff;
+  }
+  
+  .dark .empty-chat {
+    color: #b0b0b0;
+  }
+  
+  .dark h2,
+  .dark .connection-section h3,
+  .dark .offer-answer-section h3 {
+    color: #ffffff;
+  }
+  
+  .dark .input-group label,
+  .dark .step-section h4 {
+    color: #b0b0b0;
+  }
+  
+  .dark .nick {
+    color: #b0b0b0;
+  }
+  
+  .dark .time {
+    color: #808080;
+  }
+  
+  .dark .attachment-container {
+    border-color: #505050;
+  }
+  
+  .dark .resizer {
+    background-color: #404040;
+  }
+  
+  .dark .resizer:hover {
+    background-color: #505050;
+  }
+  
+  .dark .offer-refresh-info {
+    background-color: #2d4a5c;
+    border-color: #3a5a6c;
+  }
+  
+  .dark .offer-refresh-info small {
+    color: #87ceeb;
+  }
+  
+  .background-warning {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 6px;
+    text-align: center;
+  }
+  
+  .background-warning small {
+    color: #856404;
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+  
+  .notification-section {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+  }
+  
+  .notification-section h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: #212529;
+  }
+  
+  .notification-status {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 0.75rem;
+  }
+  
+  .notification-status .status-text {
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+  
+  .notification-status .help-text {
+    font-size: 0.8rem;
+    color: #6c757d;
+    line-height: 1.4;
+    margin: 0.5rem 0;
+  }
+  
+  .notification-button {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .dark .offer-refresh-info small {
+    color: #87ceeb;
+  }
+  
+  .dark .notification-section h3 {
+    color: #ffffff;
+  }
+  
+  .dark .notification-status {
+    background-color: #404040;
+    border-color: #505050;
+  }
+  
+  .dark .notification-status .help-text {
+    color: #b0b0b0;
+  }
+  
+  /* Loading overlay styles */
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+  
+  .loading-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+  
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #0d6efd;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .blurred {
+    filter: blur(2px);
+    pointer-events: none;
+  }
+  
+  /* Modal styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+  }
+  
+  .modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+  
+  .modal-content h2 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: #212529;
+  }
+  
+  .modal-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+  }
+  
+  .error-message {
+    color: #dc3545;
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  
+  .profile-image-preview,
+  .profile-image-display {
+    margin-top: 0.5rem;
+  }
+  
+  .profile-image-preview img,
+  .profile-image-display img {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #dee2e6;
+  }
+  
+  .datamap-address {
+    display: block;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+    word-break: break-all;
+  }
+  
+  /* Account package info styles */
+  .account-package-info {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+  }
+  
+  .account-package-info h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    color: #212529;
+  }
+  
+  .account-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .account-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .account-field strong {
+    font-size: 0.9rem;
+    color: #495057;
+  }
+  
+  .profile-image-display {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  
+  .no-account {
+    color: #6c757d;
+    font-style: italic;
+    margin-bottom: 1rem;
+  }
+  
+  /* Dark mode for new components */
+  .dark .loading-content {
+    background: #2d2d2d;
+    color: #ffffff;
+  }
+  
+  .dark .modal-content {
+    background: #2d2d2d;
+    color: #ffffff;
+  }
+  
+  .dark .modal-content h2 {
+    color: #ffffff;
+  }
+  
+  .dark .error-message {
+    background: #722f33;
+    border-color: #a04853;
+    color: #f8d7da;
+  }
+  
+  .dark .account-package-info {
+    background: #404040;
+    border-color: #505050;
+  }
+  
+  .dark .account-package-info h3 {
+    color: #ffffff;
+  }
+  
+  .dark .account-field strong {
+    color: #b0b0b0;
+  }
+  
+  .dark .datamap-address {
+    color: #808080;
+  }
+  
+  .dark .no-account {
+    color: #b0b0b0;
+  }
+  
+  .dark .profile-image-preview img,
+  .dark .profile-image-display img {
+    border-color: #505050;
+  }
+  
+  /* User profile display styles */
+  .user-profile {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+  }
+  
+  .profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .profile-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #dee2e6;
+  }
+  
+  .profile-avatar-placeholder {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #0d6efd;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+    border: 2px solid #dee2e6;
+  }
+  
+  .profile-info {
+    flex: 1;
+  }
+  
+  .profile-name {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #212529;
+  }
+  
+  .profile-status {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #6c757d;
+  }
+  
+  /* Dark mode for user profile */
+  .dark .user-profile {
+    background: #404040;
+    border-color: #505050;
+  }
+  
+  .dark .profile-avatar {
+    border-color: #505050;
+  }
+  
+  .dark .profile-avatar-placeholder {
+    border-color: #505050;
+  }
+  
+  .dark .profile-name {
+    color: #ffffff;
+  }
+  
+  .dark .profile-status {
+    color: #b0b0b0;
   }
 </style> 

@@ -31,34 +31,18 @@ export async function processFile(file: File): Promise<FileAttachment> {
   const id = generateAttachmentId();
   const type = getAttachmentType(file.type);
   
-  // For small files, we'll encode directly
-  if (file.size <= MAX_CHUNK_SIZE) {
-    const data = await readFileAsBase64(file);
-    
-    return {
-      id,
-      name: file.name,
-      type,
-      mimeType: file.type,
-      size: file.size,
-      data,
-      complete: true
-    };
-  } 
-  // For larger files, we'll prepare for chunking
-  else {
-    const chunks = Math.ceil(file.size / MAX_CHUNK_SIZE);
-    
-    return {
-      id,
-      name: file.name,
-      type,
-      mimeType: file.type,
-      size: file.size,
-      chunks,
-      complete: false
-    };
-  }
+  // Always process as complete base64 data (no chunking for 1MB limit)
+  const data = await readFileAsBase64(file);
+  
+  return {
+    id,
+    name: file.name,
+    type,
+    mimeType: file.type,
+    size: file.size,
+    data,
+    complete: true
+  };
 }
 
 /**
