@@ -49,5 +49,3 @@ Account packages are stored in the Autonomi Network using the scratchpad format:
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
-Copyright (c) 2024 @riddim
