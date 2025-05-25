@@ -1,80 +1,53 @@
 # P2P Chat Application
 
-A decentralized peer-to-peer chat application that enables secure, private communication between friends without relying on centralized servers.
+A decentralized peer-to-peer chat application that enables secure, private communication between friends using WebRTC for direct browser-to-browser communication and the Autonomi Network for contact establishment.
 
 ## Features
 
-- **P2P Communication**: Direct peer-to-peer messaging between friends
-- **Automatic Translation**: Built-in translation powered by Ollama (requires a local Ollama server on at least one side) -> this might be removed again short term in favor of building a reasonable plugin system where this can be re-introduced again
-- **Dark/Light Mode**: User-friendly interface 2 themes
-- **File Sharing**: Support for sending files and images (currently a bit unstable)
+- **Direct P2P Communication**: WebRTC-based peer-to-peer messaging between browsers
+- **Autonomi Network Integration**: Uses Autonomi Network scratchpads for contact handshake and account management
+- **Account Packages**: Store user profiles (username, avatar) on the Autonomi Network
+- **Dark/Light Mode**: User-friendly interface with theme support
+- **File Sharing**: Support for sending files and images directly between peers
+- **Desktop Notifications**: Get notified of new messages when the tab is in the background
+- **Connection Monitoring**: Native WebRTC connection state monitoring for reliable communication
 
 ## Architecture
 
-The application uses a hybrid approach for communication:
+The application uses a hybrid approach combining WebRTC and the Autonomi Network:
 
 ```mermaid
-graph LR
-    A[App] <--> |WebSocket| B[Autonomi Proxy]
-    B <--> |Encrypted UDP| C[Autonomi Proxy]
-    C <--> |WebSocket| D[App]
+graph TB
+    A[Browser A] <--> |WebRTC P2P| B[Browser B]
+    A <--> |HTTPS API| C[Autonomi Network]
+    B <--> |HTTPS API| C
+    
+    subgraph "Autonomi Network"
+        C --> D[Account Packages]
+        C --> E[Contact Handshake]
+        C --> F[Profile Data]
+    end
 ```
 
-- **WebSocket Connection**: Connects the app to the Autonomi proxy
-- **UDP Communication**: Encrypted content exchange between proxies
-- **Future**: Peer information exchange via Autonomi network
+- **WebRTC**: Direct browser-to-browser communication for real-time messaging and file transfer
+- **Autonomi Network**: Decentralized storage for account packages and contact establishment
+- **Scratchpads**: Used for storing user profiles and facilitating initial contact between peers
 
-## Roadmap
 
-### Short-term Goals
-- **Multi-user Chats**: Support for group conversations
-- **Direct Messages within Multi-user Chats**: Private communication within multi-user chats using public/private key encryption
-- **Improved File Sharing**: Enhanced reliability and bug fixes
+## Account Package Format
 
-### Mid-term Goals
-- **plugin system for Themes**: replacing light/darkmode - just loading the css from Autonomi (immutable Themes! :-)
-- **plugin system for Chat Message/input interaction**: this enables e.g. automatic translations, sentiment checking, auto-moderation (message-filtering for certain content), tenor integration, custom smilies, ... via JS Webcomponents loaded from Autonomi (immutable Extensions! :-)
-- **Library Development**: Core functionality packaged as a reusable library for other applications
+Account packages are stored in the Autonomi Network using the scratchpad format:
 
-### Long-term Vision
-- **Voice Chat**: Real-time audio communication
-- **Video Chat**: Video conferencing capabilities
-
-### Extended Applications
-The core technology can be adapted for various use cases:
-- Status information sharing ("online", "contact sharing")
-- Collaborative document editing without permanent write operations
-- Real-time inventory management ("item reserved in another shopping cart")
-- Location sharing and tracking
-
-## Getting Started
-
-### For Developers
-```bash
-npm install
-npm run dev
+```json
+{
+  "username": "your-username",
+  "profileImage": "datamap-address-for-avatar"
+}
 ```
+
 
 ## License
 
-MIT License
+MIT License - see [LICENSE](LICENSE) file for details.
 
-Copyright (c) 2025
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Copyright (c) 2024 @riddim
