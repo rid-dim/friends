@@ -232,37 +232,5 @@
     background-color: #45a049;
   }
   
-  /* Dark Mode Styles */
-  :global(.dark) .attachment-info {
-    background-color: #333333;
-    color: white;
-  }
-  
-  :global(.dark) .attachment-placeholder {
-    background-color: #333333;
-    border-color: #555555;
-  }
-  
-  :global(.dark) .loading {
-    color: #cccccc;
-  }
-  
-  :global(.dark) .attachment-size {
-    color: #aaaaaa;
-  }
-  
-  :global(.dark) .file-attachment {
-    background-color: #333333;
-    border-color: #555555;
-    color: white;
-  }
-  
-  :global(.dark) .file-size {
-    color: #aaaaaa;
-  }
-  
-  :global(.dark) .spinner {
-    border-color: #555555;
-    border-top-color: #3498db;
-  }
+
 </style> 

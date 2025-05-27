@@ -1,0 +1,246 @@
+/* Dark Theme for Friends P2P Chat */
+/* This theme overrides the default light theme when .friends class is applied */
+
+/* Force dark background for everything */
+.friends html, .friends body {
+  background-color: #121212 !important;
+  color: #ffffff !important;
+}
+
+/* Main container and body */
+.friends main {
+  background-color: #121212 !important;
+  color: #ffffff !important;
+}
+
+.friends .container {
+  background-color: #1e1e1e;
+}
+
+.friends .config {
+  background-color: #2d2d2d;
+  border-color: #404040;
+}
+
+.friends .burger-menu {
+  background: rgba(45, 45, 45, 0.9);
+  border-color: #404040;
+  color: #ffffff;
+}
+
+.friends .chat {
+  background-color: #2d2d2d;
+  border-color: #404040;
+}
+
+.friends .chat-header {
+  background-color: #1e1e1e;
+  border-color: #404040;
+}
+
+.friends .chat-header h1 {
+  color: #ffffff;
+}
+
+.friends .connection-indicator {
+  color: #b0b0b0;
+}
+
+.friends .message {
+  background-color: #404040;
+  border-color: #505050;
+}
+
+.friends .message.self {
+  background-color: #1a4c5c;
+  border-color: #2a5c6c;
+}
+
+.friends .input-area {
+  background-color: #1e1e1e;
+  border-color: #404040;
+}
+
+.friends .input-group input,
+.friends .input-group select,
+.friends .input-group textarea,
+.friends .input-row textarea {
+  background-color: #404040;
+  border-color: #505050;
+  color: #ffffff;
+}
+
+.friends .connection-status {
+  background-color: #404040;
+  border-color: #505050;
+}
+
+.friends .code-block textarea {
+  background-color: #1e1e1e;
+  border-color: #404040;
+  color: #ffffff;
+}
+
+.friends .pending-attachment {
+  background-color: #2d4a5c;
+  border-color: #3a5a6c;
+  color: #ffffff;
+}
+
+.friends .empty-chat {
+  color: #b0b0b0;
+}
+
+.friends h2,
+.friends .connection-section h3,
+.friends .offer-answer-section h3 {
+  color: #ffffff;
+}
+
+.friends .input-group label,
+.friends .step-section h4 {
+  color: #b0b0b0;
+}
+
+.friends .nick {
+  color: #b0b0b0;
+}
+
+.friends .time {
+  color: #808080;
+}
+
+.friends .attachment-container {
+  border-color: #505050;
+}
+
+.friends .resizer {
+  background-color: #404040;
+}
+
+.friends .resizer:hover {
+  background-color: #505050;
+}
+
+.friends .offer-refresh-info {
+  background-color: #2d4a5c;
+  border-color: #3a5a6c;
+}
+
+.friends .offer-refresh-info small {
+  color: #87ceeb;
+}
+
+.friends .notification-section h3 {
+  color: #ffffff;
+}
+
+.friends .notification-status {
+  background-color: #404040;
+  border-color: #505050;
+}
+
+.friends .notification-status .help-text {
+  color: #b0b0b0;
+}
+
+.friends .loading-content {
+  background: #2d2d2d;
+  color: #ffffff;
+}
+
+.friends .modal-content {
+  background: #2d2d2d;
+  color: #ffffff;
+}
+
+.friends .modal-content h2 {
+  color: #ffffff;
+}
+
+.friends .error-message {
+  background: #722f33;
+  border-color: #a04853;
+  color: #f8d7da;
+}
+
+.friends .account-package-info {
+  background: #404040;
+  border-color: #505050;
+}
+
+.friends .account-package-info h3 {
+  color: #ffffff;
+}
+
+.friends .account-field strong {
+  color: #b0b0b0;
+}
+
+.friends .datamap-address {
+  color: #808080;
+}
+
+.friends .no-account {
+  color: #b0b0b0;
+}
+
+.friends .profile-image-preview img,
+.friends .profile-image-display img {
+  border-color: #505050;
+}
+
+.friends .user-profile {
+  background: #404040;
+  border-color: #505050;
+}
+
+.friends .profile-avatar {
+  border-color: #505050;
+}
+
+.friends .profile-avatar-placeholder {
+  border-color: #505050;
+}
+
+.friends .profile-name {
+  color: #ffffff;
+}
+
+.friends .profile-status {
+  color: #b0b0b0;
+}
+
+/* AttachmentView component styles */
+.friends .attachment-info {
+  background-color: #333333;
+  color: white;
+}
+
+.friends .attachment-placeholder {
+  background-color: #333333;
+  border-color: #555555;
+}
+
+.friends .loading {
+  color: #cccccc;
+}
+
+.friends .attachment-size {
+  color: #aaaaaa;
+}
+
+.friends .file-attachment {
+  background-color: #333333;
+  border-color: #555555;
+  color: white;
+}
+
+.friends .file-size {
+  color: #aaaaaa;
+}
+
+.friends .spinner {
+  border-color: #555555;
+  border-top-color: #3498db;
+} 

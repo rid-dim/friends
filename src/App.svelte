@@ -11,6 +11,7 @@
   interface AccountPackage {
     username: string;
     profileImage?: string; // datamap address
+    themeUrl?: string; // theme URL or identifier
   }
   
   // Backend related state
@@ -20,7 +21,8 @@
   let showAccountCreation = false;
   let accountCreationForm = {
     username: '',
-    profileImage: ''
+    profileImage: '',
+    themeUrl: 'default'
   };
   let accountCreationError = '';
   
@@ -87,7 +89,7 @@
   }
   let messageInput = '';
   let notification = '';
-  let isDarkMode = false;
+  let themeUrl = 'default';
   let showConfig = true;
   let configWidth = 220;
   let isDragging = false;
@@ -96,10 +98,10 @@
   // Notification support for background messages
   let notificationsEnabled = false;
   
-  // Check localStorage for dark mode preference
+  // Check localStorage for theme preference
   if (browser) {
-    const storedTheme = localStorage.getItem('theme');
-    isDarkMode = storedTheme === 'dark';
+    const storedTheme = localStorage.getItem('themeUrl');
+    themeUrl = storedTheme || 'default';
   }
   
   // Parse backend URL from query parameters
@@ -253,7 +255,8 @@
     
     const accountData: AccountPackage = {
       username: accountCreationForm.username.trim(),
-      profileImage: accountCreationForm.profileImage.trim() || undefined
+      profileImage: accountCreationForm.profileImage.trim() || undefined,
+      themeUrl: accountCreationForm.themeUrl.trim() || 'default'
     };
     
     const success = await createAccountPackage(accountData);
@@ -270,7 +273,7 @@
   // Cancel account creation
   function cancelAccountCreation() {
     showAccountCreation = false;
-    accountCreationForm = { username: '', profileImage: '' };
+    accountCreationForm = { username: '', profileImage: '', themeUrl: 'default' };
     accountCreationError = '';
   }
   
@@ -295,6 +298,14 @@
       
       if (fetchedPackage) {
         accountPackage = fetchedPackage;
+        
+        // Load theme from account package if available
+        if (fetchedPackage.themeUrl) {
+          themeUrl = fetchedPackage.themeUrl;
+          loadTheme(fetchedPackage.themeUrl);
+          console.log('🎨 Loaded theme from account package:', fetchedPackage.themeUrl);
+        }
+        
         showNotification(`Welcome back, ${fetchedPackage.username}!`);
         console.log('✅ Account package loaded successfully:', fetchedPackage);
       } else {
@@ -310,15 +321,115 @@
     }
   }
   
-  function toggleTheme(newValue?: boolean) {
-    if (newValue !== undefined) {
-      isDarkMode = newValue === true;
-    } else {
-      isDarkMode = !isDarkMode;
+  // Update account package on backend
+  async function updateAccountPackage(updatedData: Partial<AccountPackage>): Promise<boolean> {
+    if (!backendUrl || !accountPackage) return false;
+    
+    console.log('🔄 Updating account package with:', updatedData);
+    
+    // Merge updated data with existing account package
+    const newAccountData: AccountPackage = {
+      ...accountPackage,
+      ...updatedData
+    };
+    
+    try {
+      // Convert account data to JSON string, then to byte array
+      const accountJson = JSON.stringify(newAccountData);
+      const accountBytes = jsonToByteArray(accountJson);
+      
+      // Wrap in scratchpad format
+      const scratchpadPayload = {
+        counter: 0,
+        data_encoding: 0,
+        dweb_type: "PrivateScratchpad",
+        encryped_data: [0],
+        scratchpad_address: "string",
+        unencrypted_data: accountBytes
+      };
+      
+      const response = await fetch(`${backendUrl}/ant-0/scratchpad-private`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Ant-App-ID': 'friends'
+        },
+        body: JSON.stringify(scratchpadPayload)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      // Update local account package
+      accountPackage = newAccountData;
+      console.log('✅ Account package updated successfully');
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating account package:', error);
+      showNotification('Error updating account package: ' + error);
+      return false;
+    }
+  }
+  
+  function loadTheme(url: string) {
+    // Remove existing theme link if any
+    const existingThemeLink = document.getElementById('dynamic-theme');
+    if (existingThemeLink) {
+      existingThemeLink.remove();
     }
     
+    // Remove friends class when removing themes
+    document.documentElement.classList.remove('friends');
+    
+    if (url === 'default') {
+      // No external theme, use built-in light theme
+      return;
+    }
+    
+    // Determine full URL for theme loading
+    let themeFullUrl: string;
+    if (url.startsWith('http')) {
+      // Full URL provided
+      themeFullUrl = url;
+    } else {
+      // Datamap address - construct URL using backend
+      themeFullUrl = `${backendUrl}/ant-0/data/${url}`;
+    }
+    
+    // Create and append new theme link
+    const themeLink = document.createElement('link');
+    themeLink.id = 'dynamic-theme';
+    themeLink.rel = 'stylesheet';
+    themeLink.href = themeFullUrl;
+    
+    themeLink.onload = () => {
+      console.log('✅ Theme loaded successfully:', themeFullUrl);
+      // Apply friends class for external themes
+      document.documentElement.classList.add('friends');
+      showNotification('Theme loaded successfully');
+    };
+    
+    themeLink.onerror = () => {
+      console.error('❌ Failed to load theme:', themeFullUrl);
+      showNotification('Failed to load theme: ' + themeFullUrl);
+    };
+    
+    document.head.appendChild(themeLink);
+  }
+  
+  function handleThemeChange() {
+    loadTheme(themeUrl);
+    
+    // Save theme to account package if available
+    if (accountPackage && backendUrl) {
+      updateAccountPackage({ themeUrl: themeUrl });
+      console.log('🎨 Saved theme to account package:', themeUrl);
+    }
+    
+    // Also save to localStorage as fallback
     if (browser) {
-      localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+      localStorage.setItem('themeUrl', themeUrl);
     }
   }
   
@@ -1179,6 +1290,11 @@
     // Initialize background throttling countermeasures
     setupVisibilityMonitoring();
     
+    // Load saved theme
+    if (themeUrl && themeUrl !== 'default') {
+      loadTheme(themeUrl);
+    }
+    
     // Check notification permissions on startup
     if (browser && 'Notification' in window) {
       if (Notification.permission === 'granted') {
@@ -1199,7 +1315,7 @@
   });
 </script>
 
-<main class={isDarkMode ? 'dark' : 'light'}>
+<main>
   <!-- Loading overlay for account package fetching -->
   {#if isLoadingAccountPackage}
     <div class="loading-overlay">
@@ -1246,6 +1362,15 @@
                 />
               </div>
             {/if}
+          </div>
+          
+          <div class="input-group">
+            <label for="create-theme-url">Theme URL</label>
+            <input 
+              id="create-theme-url"
+              bind:value={accountCreationForm.themeUrl}
+              placeholder="Optional: theme URL"
+            >
           </div>
           
           {#if accountCreationError}
@@ -1295,6 +1420,11 @@
                     />
                     <span class="datamap-address">{accountPackage.profileImage}</span>
                   </div>
+                </div>
+              {/if}
+              {#if accountPackage.themeUrl}
+                <div class="account-field">
+                  <strong>Theme:</strong> {accountPackage.themeUrl}
                 </div>
               {/if}
               {#if backendUrl}
@@ -1350,13 +1480,20 @@
         
         <div class="input-group">
           <label for="theme">Theme</label>
-          <select id="theme" on:change={(e) => {
-            const target = e.target as HTMLSelectElement;
-            toggleTheme(target.value === 'true');
-          }}>
-            <option value="false" selected={!isDarkMode}>Light</option>
-            <option value="true" selected={isDarkMode}>Dark</option>
-          </select>
+          <input 
+            id="theme" 
+            type="text" 
+            bind:value={themeUrl}
+            on:change={handleThemeChange}
+            placeholder="default, datamap-address, or http://..."
+          />
+          <small class="help-text">
+            {#if accountPackage && backendUrl}
+              Theme will be saved to your account package and synced across devices
+            {:else}
+              Enter 'default' for built-in theme, a datamap address, or a full HTTP URL
+            {/if}
+          </small>
         </div>
         
         <!-- Desktop Notifications Section -->
@@ -1488,7 +1625,7 @@
     <div class="resizer" on:mousedown={startResize} role="separator" style="display: {showConfig ? 'block' : 'none'};"></div>
     
     <div class="chat">
-      <div class="chat-header">
+      <div class="chat-header" class:config-visible={showConfig}>
         <h1>WebRTC P2P Chat</h1>
         <div class="connection-indicator">
           <span class="status-dot status-{connectionState}"></span>
@@ -1612,7 +1749,7 @@
   
   .config {
     min-width: 200px;
-    padding: 1rem;
+    padding: 1rem 1rem 1rem 3.5rem; /* Add left padding for burger menu */
     background: #f8f9fa;
     border-radius: 8px 0 0 8px;
     overflow-y: auto;
@@ -1816,7 +1953,7 @@
   }
   
   .chat-header {
-    padding: 1rem;
+    padding: 1rem 1rem 1rem 3.5rem; /* Add left padding for burger menu */
     background: #f8f9fa;
     border-bottom: 1px solid #dee2e6;
     display: flex;
@@ -1824,6 +1961,11 @@
     align-items: center;
     flex-wrap: wrap;
     gap: 1rem;
+  }
+  
+  /* Reset chat-header padding when config is visible */
+  .chat-header.config-visible {
+    padding-left: 1rem;
   }
   
   .chat-header h1 {
@@ -2061,6 +2203,20 @@
       left: 0.25rem;
     }
     
+    .config {
+      padding-left: 3rem; /* Less padding on mobile */
+    }
+    
+    .chat-header {
+      flex-direction: column;
+      align-items: flex-start;
+      padding-left: 3rem; /* Less padding on mobile */
+    }
+    
+    .chat-header.config-visible {
+      padding-left: 0.75rem; /* Even less when config is visible on mobile */
+    }
+    
     .input-row {
       flex-direction: column;
       align-items: stretch;
@@ -2071,136 +2227,9 @@
       justify-content: space-between;
     align-items: center;
     }
-    
-    .chat-header {
-      flex-direction: column;
-      align-items: flex-start;
-    }
   }
 
-  /* Dark mode styles */
-  .dark {
-    background-color: #121212;
-    color: #ffffff;
-  }
-  
-  .dark .container {
-    background-color: #1e1e1e;
-  }
-  
-  .dark .config {
-    background-color: #2d2d2d;
-    border-color: #404040;
-  }
-  
-  .dark .burger-menu {
-    background: rgba(45, 45, 45, 0.9);
-    border-color: #404040;
-    color: #ffffff;
-  }
-  
-  .dark .chat {
-    background-color: #2d2d2d;
-    border-color: #404040;
-  }
-  
-  .dark .chat-header {
-    background-color: #1e1e1e;
-    border-color: #404040;
-  }
-  
-  .dark .chat-header h1 {
-    color: #ffffff;
-  }
-  
-  .dark .connection-indicator {
-    color: #b0b0b0;
-  }
-  
-  .dark .message {
-    background-color: #404040;
-    border-color: #505050;
-  }
-  
-  .dark .message.self {
-    background-color: #1a4c5c;
-    border-color: #2a5c6c;
-  }
-  
-  .dark .input-area {
-    background-color: #1e1e1e;
-    border-color: #404040;
-  }
-  
-  .dark .input-group input,
-  .dark .input-group select,
-  .dark .input-group textarea,
-  .dark .input-row textarea {
-    background-color: #404040;
-    border-color: #505050;
-    color: #ffffff;
-  }
-  
-  .dark .connection-status {
-    background-color: #404040;
-    border-color: #505050;
-  }
-  
-  .dark .code-block textarea {
-    background-color: #1e1e1e;
-    border-color: #404040;
-    color: #ffffff;
-  }
-  
-  .dark .pending-attachment {
-    background-color: #2d4a5c;
-    border-color: #3a5a6c;
-    color: #ffffff;
-  }
-  
-  .dark .empty-chat {
-    color: #b0b0b0;
-  }
-  
-  .dark h2,
-  .dark .connection-section h3,
-  .dark .offer-answer-section h3 {
-    color: #ffffff;
-  }
-  
-  .dark .input-group label,
-  .dark .step-section h4 {
-    color: #b0b0b0;
-  }
-  
-  .dark .nick {
-    color: #b0b0b0;
-  }
-  
-  .dark .time {
-    color: #808080;
-  }
-  
-  .dark .attachment-container {
-    border-color: #505050;
-  }
-  
-  .dark .resizer {
-    background-color: #404040;
-  }
-  
-  .dark .resizer:hover {
-    background-color: #505050;
-  }
-  
-  .dark .offer-refresh-info {
-    background-color: #2d4a5c;
-    border-color: #3a5a6c;
-  }
-  
-  .dark .offer-refresh-info small {
-    color: #87ceeb;
-  }
+
   
   .background-warning {
     margin-top: 1rem;
@@ -2256,22 +2285,7 @@
     padding: 0.5rem 0.75rem;
   }
   
-  .dark .offer-refresh-info small {
-    color: #87ceeb;
-  }
-  
-  .dark .notification-section h3 {
-    color: #ffffff;
-  }
-  
-  .dark .notification-status {
-    background-color: #404040;
-    border-color: #505050;
-  }
-  
-  .dark .notification-status .help-text {
-    color: #b0b0b0;
-  }
+
   
   /* Loading overlay styles */
   .loading-overlay {
@@ -2430,52 +2444,7 @@
     margin-bottom: 1rem;
   }
   
-  /* Dark mode for new components */
-  .dark .loading-content {
-    background: #2d2d2d;
-    color: #ffffff;
-  }
-  
-  .dark .modal-content {
-    background: #2d2d2d;
-    color: #ffffff;
-  }
-  
-  .dark .modal-content h2 {
-    color: #ffffff;
-  }
-  
-  .dark .error-message {
-    background: #722f33;
-    border-color: #a04853;
-    color: #f8d7da;
-  }
-  
-  .dark .account-package-info {
-    background: #404040;
-    border-color: #505050;
-  }
-  
-  .dark .account-package-info h3 {
-    color: #ffffff;
-  }
-  
-  .dark .account-field strong {
-    color: #b0b0b0;
-  }
-  
-  .dark .datamap-address {
-    color: #808080;
-  }
-  
-  .dark .no-account {
-    color: #b0b0b0;
-  }
-  
-  .dark .profile-image-preview img,
-  .dark .profile-image-display img {
-    border-color: #505050;
-  }
+
   
   /* User profile display styles */
   .user-profile {
@@ -2531,25 +2500,5 @@
     color: #6c757d;
   }
   
-  /* Dark mode for user profile */
-  .dark .user-profile {
-    background: #404040;
-    border-color: #505050;
-  }
-  
-  .dark .profile-avatar {
-    border-color: #505050;
-  }
-  
-  .dark .profile-avatar-placeholder {
-    border-color: #505050;
-  }
-  
-  .dark .profile-name {
-    color: #ffffff;
-  }
-  
-  .dark .profile-status {
-    color: #b0b0b0;
-  }
+
 </style> 

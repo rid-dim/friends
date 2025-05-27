@@ -1,0 +1,312 @@
+/* Purple Theme for Friends P2P Chat */
+/* Dark theme with purple accents and deep violet tones when .friends class is applied */
+
+/* Force purple background for everything */
+.friends html, .friends body {
+  background: linear-gradient(135deg, #1a0933 0%, #2d1b4e 100%) !important;
+  color: #e8d8ff !important;
+}
+
+/* Ensure all containers inherit purple styling */
+*, *::before, *::after {
+  background-color: inherit;
+  color: inherit;
+}
+
+/* Main container and body */
+.friends main {
+  background: linear-gradient(135deg, #1a0933 0%, #2d1b4e 100%) !important;
+  color: #e8d8ff !important;
+}
+
+.friends .container {
+  background-color: #2d1b4e;
+}
+
+.friends .config {
+  background: linear-gradient(145deg, #3d2a5c 0%, #2d1b4e 100%);
+  border-color: #6a4c93;
+  box-shadow: inset 0 1px 3px rgba(138, 43, 226, 0.1);
+}
+
+.friends .burger-menu {
+  background: rgba(61, 42, 92, 0.95);
+  border-color: #6a4c93;
+  color: #e8d8ff;
+  box-shadow: 0 2px 8px rgba(138, 43, 226, 0.3);
+}
+
+.friends .chat {
+  background: linear-gradient(145deg, #3d2a5c 0%, #2d1b4e 100%);
+  border-color: #6a4c93;
+}
+
+.friends .chat-header {
+  background: linear-gradient(90deg, #4a2c70 0%, #3d2a5c 100%);
+  border-color: #6a4c93;
+  box-shadow: 0 2px 8px rgba(138, 43, 226, 0.2);
+}
+
+.friends .chat-header h1 {
+  color: #e8d8ff;
+  text-shadow: 0 1px 3px rgba(138, 43, 226, 0.5);
+}
+
+.friends .connection-indicator {
+  color: #c7a8ff;
+}
+
+.friends .message {
+  background: linear-gradient(145deg, #4a2c70 0%, #3d2a5c 100%);
+  border-color: #6a4c93;
+  box-shadow: 0 2px 8px rgba(138, 43, 226, 0.1);
+}
+
+.friends .message.self {
+  background: linear-gradient(145deg, #6a4c93 0%, #5a3b7a 100%);
+  border-color: #8a2be2;
+  box-shadow: 0 2px 8px rgba(138, 43, 226, 0.3);
+}
+
+.friends .input-area {
+  background: linear-gradient(90deg, #3d2a5c 0%, #2d1b4e 100%);
+  border-color: #6a4c93;
+}
+
+.friends .input-group input,
+.friends .input-group select,
+.friends .input-group textarea,
+.friends .input-row textarea {
+  background: linear-gradient(145deg, #4a2c70 0%, #3d2a5c 100%);
+  border-color: #6a4c93;
+  color: #e8d8ff;
+  box-shadow: inset 0 1px 3px rgba(138, 43, 226, 0.2);
+}
+
+.friends .input-group input:focus,
+.friends .input-group select:focus,
+.friends .input-group textarea:focus,
+.friends .input-row textarea:focus {
+  border-color: #8a2be2;
+  box-shadow: 0 0 8px rgba(138, 43, 226, 0.4);
+}
+
+.friends .connection-status {
+  background: linear-gradient(145deg, #4a2c70 0%, #3d2a5c 100%);
+  border-color: #6a4c93;
+}
+
+.friends .code-block textarea {
+  background: #2d1b4e;
+  border-color: #6a4c93;
+  color: #e8d8ff;
+}
+
+.friends .pending-attachment {
+  background: linear-gradient(145deg, #6a4c93 0%, #5a3b7a 100%);
+  border-color: #8a2be2;
+  color: #e8d8ff;
+}
+
+.friends .empty-chat {
+  color: #c7a8ff;
+}
+
+.friends h2,
+.friends .connection-section h3,
+.friends .offer-answer-section h3 {
+  color: #e8d8ff;
+  text-shadow: 0 1px 2px rgba(138, 43, 226, 0.3);
+}
+
+.friends .input-group label,
+.friends .step-section h4 {
+  color: #c7a8ff;
+}
+
+.friends .nick {
+  color: #c7a8ff;
+  font-weight: 600;
+}
+
+.friends .time {
+  color: #9b7cb8;
+}
+
+.friends .attachment-container {
+  border-color: #6a4c93;
+}
+
+.friends .resizer {
+  background: linear-gradient(90deg, #6a4c93 0%, #8a2be2 100%);
+}
+
+.friends .resizer:hover {
+  background: linear-gradient(90deg, #8a2be2 0%, #9932cc 100%);
+  box-shadow: 0 0 8px rgba(138, 43, 226, 0.5);
+}
+
+.friends .offer-refresh-info {
+  background: linear-gradient(145deg, #5a3b7a 0%, #4a2c70 100%);
+  border-color: #8a2be2;
+}
+
+.friends .offer-refresh-info small {
+  color: #dda0dd;
+}
+
+.friends .notification-section h3 {
+  color: #e8d8ff;
+}
+
+.friends .notification-status {
+  background: linear-gradient(145deg, #4a2c70 0%, #3d2a5c 100%);
+  border-color: #6a4c93;
+}
+
+.friends .notification-status .help-text {
+  color: #c7a8ff;
+}
+
+.friends .loading-content {
+  background: linear-gradient(145deg, #3d2a5c 0%, #2d1b4e 100%);
+  color: #e8d8ff;
+  box-shadow: 0 8px 32px rgba(138, 43, 226, 0.3);
+}
+
+.friends .modal-content {
+  background: linear-gradient(145deg, #3d2a5c 0%, #2d1b4e 100%);
+  color: #e8d8ff;
+  border: 1px solid #6a4c93;
+}
+
+.friends .modal-content h2 {
+  color: #e8d8ff;
+}
+
+.friends .error-message {
+  background: linear-gradient(145deg, #6d1f47 0%, #4a1a2e 100%);
+  border-color: #d63384;
+  color: #ffb3d1;
+}
+
+.friends .account-package-info {
+  background: linear-gradient(145deg, #4a2c70 0%, #3d2a5c 100%);
+  border-color: #6a4c93;
+}
+
+.friends .account-package-info h3 {
+  color: #e8d8ff;
+}
+
+.friends .account-field strong {
+  color: #c7a8ff;
+}
+
+.friends .datamap-address {
+  color: #9b7cb8;
+}
+
+.friends .no-account {
+  color: #c7a8ff;
+}
+
+.friends .profile-image-preview img,
+.friends .profile-image-display img {
+  border-color: #6a4c93;
+  box-shadow: 0 2px 8px rgba(138, 43, 226, 0.3);
+}
+
+.friends .user-profile {
+  background: linear-gradient(145deg, #4a2c70 0%, #3d2a5c 100%);
+  border-color: #6a4c93;
+}
+
+.friends .profile-avatar {
+  border-color: #6a4c93;
+}
+
+.friends .profile-avatar-placeholder {
+  background: linear-gradient(145deg, #8a2be2 0%, #6a4c93 100%);
+  border-color: #6a4c93;
+}
+
+.friends .profile-name {
+  color: #e8d8ff;
+}
+
+.friends .profile-status {
+  color: #c7a8ff;
+}
+
+/* Buttons */
+.friends .primary-button {
+  background: linear-gradient(145deg, #8a2be2 0%, #6a4c93 100%) !important;
+  border-color: #8a2be2 !important;
+  box-shadow: 0 2px 8px rgba(138, 43, 226, 0.3) !important;
+}
+
+.friends .primary-button:hover:not(:disabled) {
+  background: linear-gradient(145deg, #9932cc 0%, #7a5b9a 100%) !important;
+  box-shadow: 0 4px 16px rgba(138, 43, 226, 0.4) !important;
+}
+
+.friends .secondary-button {
+  background: linear-gradient(145deg, #6a4c93 0%, #4a2c70 100%) !important;
+  border-color: #6a4c93 !important;
+}
+
+.friends .secondary-button:hover {
+  background: linear-gradient(145deg, #7a5b9a 0%, #5a3b7a 100%) !important;
+}
+
+/* AttachmentView component styles */
+.friends .attachment-info {
+  background: linear-gradient(145deg, #4a2c70 0%, #3d2a5c 100%);
+  color: #e8d8ff;
+  border-color: #6a4c93;
+}
+
+.friends .attachment-placeholder {
+  background: linear-gradient(145deg, #4a2c70 0%, #3d2a5c 100%);
+  border-color: #6a4c93;
+}
+
+.friends .loading {
+  color: #c7a8ff;
+}
+
+.friends .attachment-size {
+  color: #9b7cb8;
+}
+
+.friends .file-attachment {
+  background: linear-gradient(145deg, #4a2c70 0%, #3d2a5c 100%);
+  border-color: #6a4c93;
+  color: #e8d8ff;
+}
+
+.friends .file-size {
+  color: #9b7cb8;
+}
+
+.friends .spinner {
+  border-color: #6a4c93;
+  border-top-color: #8a2be2;
+}
+
+/* Status indicators with purple variants */
+.friends .status-indicator.status-connected, .friends .status-dot.status-connected { 
+  background: linear-gradient(145deg, #32cd32 0%, #228b22 100%);
+  box-shadow: 0 0 8px rgba(50, 205, 50, 0.4);
+}
+
+.friends .status-indicator.status-connecting, .friends .status-dot.status-connecting { 
+  background: linear-gradient(145deg, #8a2be2 0%, #6a4c93 100%);
+  box-shadow: 0 0 8px rgba(138, 43, 226, 0.4);
+}
+
+.friends .status-indicator.status-failed, .friends .status-dot.status-failed { 
+  background: linear-gradient(145deg, #dc143c 0%, #b22222 100%);
+  box-shadow: 0 0 8px rgba(220, 20, 60, 0.4);
+} 
