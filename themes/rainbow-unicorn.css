@@ -1,0 +1,610 @@
+/* Rainbow Unicorn Theme for Friends P2P Chat */
+/* Magical rainbow theme with unicorn sparkles when .friends class is applied */
+
+/* Force rainbow background for everything */
+.friends html, .friends body {
+  background: linear-gradient(45deg, 
+    #ff9a9e 0%, #fecfef 20%, #fecfef 40%, 
+    #c7d2fe 60%, #a2e2ff 80%, #b7f8db 100%) !important;
+  color: #4a154b !important;
+  animation: rainbow-shift 10s ease-in-out infinite;
+}
+
+@keyframes rainbow-shift {
+  0%, 100% { 
+    background: linear-gradient(45deg, 
+      #ff9a9e 0%, #fecfef 20%, #fecfef 40%, 
+      #c7d2fe 60%, #a2e2ff 80%, #b7f8db 100%);
+  }
+  50% { 
+    background: linear-gradient(45deg, 
+      #b7f8db 0%, #a2e2ff 20%, #c7d2fe 40%, 
+      #fecfef 60%, #fecfef 80%, #ff9a9e 100%);
+  }
+}
+
+/* Main container and body */
+.friends main {
+  background: linear-gradient(45deg, 
+    #ff9a9e 0%, #fecfef 20%, #fecfef 40%, 
+    #c7d2fe 60%, #a2e2ff 80%, #b7f8db 100%) !important;
+  color: #4a154b !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Magical sparkle background animation */
+.friends main::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.8) 2px, transparent 2px),
+    radial-gradient(circle at 60% 40%, rgba(255, 192, 203, 0.6) 1px, transparent 1px),
+    radial-gradient(circle at 80% 60%, rgba(173, 216, 230, 0.6) 1px, transparent 1px),
+    radial-gradient(circle at 40% 80%, rgba(255, 255, 255, 0.8) 1px, transparent 1px);
+  background-size: 100px 100px, 150px 150px, 120px 120px, 80px 80px;
+  animation: sparkle 8s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes sparkle {
+  0% { background-position: 0 0, 0 0, 0 0, 0 0; }
+  25% { background-position: 50px 50px, -25px 25px, 60px -30px, 40px 20px; }
+  50% { background-position: 100px 100px, -50px 50px, 120px -60px, 80px 40px; }
+  75% { background-position: 150px 50px, -75px 75px, 180px -90px, 120px 60px; }
+  100% { background-position: 200px 0px, -100px 100px, 240px -120px, 160px 80px; }
+}
+
+.friends .container {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(255, 192, 203, 0.3);
+}
+
+.friends .config {
+  background: linear-gradient(135deg, 
+    rgba(255, 182, 193, 0.9) 0%, 
+    rgba(221, 160, 221, 0.9) 50%, 
+    rgba(173, 216, 230, 0.9) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+  box-shadow: 
+    0 8px 32px rgba(255, 192, 203, 0.4),
+    inset 0 1px 3px rgba(255, 255, 255, 0.5);
+}
+
+.friends .burger-menu {
+  background: linear-gradient(135deg, #ff69b4, #da70d6, #ba55d3);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  color: white;
+  border-radius: 15px;
+  box-shadow: 
+    0 4px 15px rgba(255, 105, 180, 0.5),
+    0 0 20px rgba(218, 112, 214, 0.3);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.friends .burger-menu:hover {
+  transform: scale(1.1);
+  box-shadow: 
+    0 6px 25px rgba(255, 105, 180, 0.7),
+    0 0 30px rgba(218, 112, 214, 0.5);
+}
+
+.friends .chat {
+  background: linear-gradient(135deg, 
+    rgba(255, 182, 193, 0.8) 0%, 
+    rgba(221, 160, 221, 0.8) 50%, 
+    rgba(173, 216, 230, 0.8) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(255, 192, 203, 0.4);
+}
+
+.friends .chat-header {
+  background: linear-gradient(90deg, 
+    rgba(255, 105, 180, 0.9) 0%, 
+    rgba(218, 112, 214, 0.9) 50%, 
+    rgba(186, 85, 211, 0.9) 100%);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 4px 15px rgba(255, 105, 180, 0.4);
+}
+
+.friends .chat-header h1 {
+  color: white;
+  text-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 0 10px rgba(255, 255, 255, 0.5);
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.friends .connection-indicator {
+  color: #2d1b69 !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 25px !important;
+  border: 2px solid #ff69b4 !important;
+  text-shadow: none !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 15px rgba(255, 105, 180, 0.3) !important;
+}
+
+.friends .message {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(255, 182, 193, 0.7) 100%);
+  border: 2px solid rgba(255, 105, 180, 0.3);
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(255, 192, 203, 0.3);
+  backdrop-filter: blur(5px);
+}
+
+.friends .message.self {
+  background: linear-gradient(135deg, 
+    rgba(218, 112, 214, 0.8) 0%, 
+    rgba(186, 85, 211, 0.8) 100%);
+  border: 2px solid rgba(255, 105, 180, 0.6);
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 20px rgba(218, 112, 214, 0.4);
+}
+
+.friends .input-area {
+  background: linear-gradient(90deg, 
+    rgba(255, 182, 193, 0.8) 0%, 
+    rgba(221, 160, 221, 0.8) 100%);
+  border-top: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 0 0 20px 20px;
+}
+
+.friends .input-group input,
+.friends .input-group select,
+.friends .input-group textarea,
+.friends .input-row textarea {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(255, 182, 193, 0.6) 100%);
+  border: 2px solid rgba(255, 105, 180, 0.4);
+  color: #4a154b;
+  border-radius: 15px;
+  box-shadow: inset 0 2px 5px rgba(255, 192, 203, 0.3);
+  transition: all 0.3s ease;
+}
+
+.friends .input-group input:focus,
+.friends .input-group select:focus,
+.friends .input-group textarea:focus,
+.friends .input-row textarea:focus {
+  border-color: #ff69b4;
+  box-shadow: 
+    0 0 15px rgba(255, 105, 180, 0.6),
+    inset 0 2px 5px rgba(255, 192, 203, 0.3);
+  transform: scale(1.02);
+}
+
+.friends .connection-status {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 3px solid #ff69b4 !important;
+  border-radius: 15px !important;
+  box-shadow: 0 6px 20px rgba(255, 105, 180, 0.4) !important;
+}
+
+.friends .connection-status .status-text {
+  color: #2d1b69 !important;
+  font-weight: 700 !important;
+  text-shadow: none !important;
+  font-size: 1rem !important;
+}
+
+.friends .code-block textarea {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.95) 0%, 
+    rgba(240, 248, 255, 0.95) 100%);
+  border: 2px solid rgba(255, 105, 180, 0.4);
+  color: #4a154b;
+  border-radius: 15px;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.friends .pending-attachment {
+  background: linear-gradient(135deg, 
+    rgba(255, 105, 180, 0.8) 0%, 
+    rgba(218, 112, 214, 0.8) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  color: white;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(255, 105, 180, 0.4);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.friends .empty-chat {
+  color: #ff69b4;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+}
+
+.friends h2,
+.friends .connection-section h3,
+.friends .offer-answer-section h3 {
+  color: #4a154b;
+  text-shadow: 
+    0 1px 3px rgba(255, 255, 255, 0.8),
+    0 0 10px rgba(255, 105, 180, 0.3);
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+.friends .input-group label,
+.friends .step-section h4 {
+  color: #da70d6;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+}
+
+.friends .nick {
+  color: #ff69b4;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.friends .time {
+  color: #ba55d3;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+
+.friends .attachment-container {
+  border-top: 2px solid rgba(255, 105, 180, 0.3);
+}
+
+.friends .resizer {
+  background: linear-gradient(90deg, #ff69b4 0%, #da70d6 50%, #ba55d3 100%);
+  border-radius: 5px;
+  box-shadow: 0 2px 10px rgba(255, 105, 180, 0.4);
+}
+
+.friends .resizer:hover {
+  background: linear-gradient(90deg, #ff1493 0%, #da70d6 50%, #8a2be2 100%);
+  box-shadow: 0 4px 20px rgba(255, 105, 180, 0.6);
+  transform: scaleY(1.5);
+}
+
+.friends .offer-refresh-info {
+  background: linear-gradient(135deg, 
+    rgba(255, 182, 193, 0.9) 0%, 
+    rgba(221, 160, 221, 0.9) 100%);
+  border: 2px solid rgba(255, 105, 180, 0.5);
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(255, 192, 203, 0.3);
+}
+
+.friends .offer-refresh-info small {
+  color: #ff69b4;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+}
+
+.friends .notification-section h3 {
+  color: #4a154b;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+.friends .notification-status {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(255, 182, 193, 0.7) 100%);
+  border: 2px solid rgba(255, 105, 180, 0.3);
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(255, 192, 203, 0.3);
+}
+
+.friends .notification-status .help-text {
+  color: #da70d6;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+
+.friends .loading-content {
+  background: linear-gradient(135deg, 
+    rgba(255, 182, 193, 0.95) 0%, 
+    rgba(221, 160, 221, 0.95) 100%);
+  color: #4a154b;
+  border: 2px solid rgba(255, 105, 180, 0.5);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(255, 192, 203, 0.5);
+}
+
+.friends .modal-content {
+  background: linear-gradient(135deg, 
+    rgba(255, 182, 193, 0.98) 0%, 
+    rgba(221, 160, 221, 0.98) 100%);
+  color: #4a154b;
+  border: 2px solid rgba(255, 105, 180, 0.6);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(255, 192, 203, 0.6);
+}
+
+.friends .modal-content h2 {
+  color: #4a154b;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+.friends .error-message {
+  background: linear-gradient(135deg, 
+    rgba(255, 20, 147, 0.9) 0%, 
+    rgba(220, 20, 60, 0.9) 100%);
+  border: 2px solid #ff1493;
+  color: white;
+  border-radius: 15px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 15px rgba(255, 20, 147, 0.4);
+}
+
+.friends .account-package-info {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(255, 182, 193, 0.7) 100%);
+  border: 2px solid rgba(255, 105, 180, 0.3);
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(255, 192, 203, 0.3);
+}
+
+.friends .account-package-info h3 {
+  color: #4a154b;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+.friends .account-field strong {
+  color: #da70d6;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.friends .datamap-address {
+  color: #ba55d3;
+  font-family: 'Monaco', 'Courier New', monospace;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+
+.friends .no-account {
+  color: #ff69b4;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.friends .profile-image-preview img,
+.friends .profile-image-display img {
+  border: 3px solid #ff69b4;
+  border-radius: 50%;
+  box-shadow: 0 4px 15px rgba(255, 105, 180, 0.5);
+}
+
+.friends .user-profile {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(255, 182, 193, 0.7) 100%);
+  border: 2px solid rgba(255, 105, 180, 0.3);
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(255, 192, 203, 0.3);
+}
+
+.friends .profile-avatar {
+  border: 3px solid #ff69b4;
+  box-shadow: 0 4px 15px rgba(255, 105, 180, 0.5);
+}
+
+.friends .profile-avatar-placeholder {
+  background: linear-gradient(135deg, #ff69b4 0%, #da70d6 100%);
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  color: white;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.friends .profile-name {
+  color: #4a154b;
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8);
+}
+
+.friends .profile-status {
+  color: #da70d6;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+
+/* Magical rainbow buttons */
+.friends .primary-button {
+  background: linear-gradient(135deg, #ff69b4 0%, #da70d6 50%, #ba55d3 100%) !important;
+  border: 2px solid rgba(255, 255, 255, 0.8) !important;
+  color: white !important;
+  font-weight: bold !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  border-radius: 25px !important;
+  box-shadow: 0 4px 15px rgba(255, 105, 180, 0.5), 0 0 20px rgba(218, 112, 214, 0.3) !important;
+  transition: all 0.3s ease !important;
+}
+
+.friends .primary-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff1493 0%, #da70d6 50%, #8a2be2 100%) !important;
+  transform: translateY(-2px) scale(1.05) !important;
+  box-shadow: 0 8px 25px rgba(255, 105, 180, 0.7), 0 0 30px rgba(218, 112, 214, 0.5) !important;
+}
+
+.friends .secondary-button {
+  background: linear-gradient(135deg, 
+    rgba(255, 182, 193, 0.9) 0%, 
+    rgba(221, 160, 221, 0.9) 100%) !important;
+  border: 2px solid #ff69b4 !important;
+  color: #4a154b !important;
+  font-weight: 600 !important;
+  border-radius: 25px !important;
+  box-shadow: 0 4px 15px rgba(255, 192, 203, 0.4) !important;
+}
+
+.friends .secondary-button:hover {
+  background: linear-gradient(135deg, 
+    rgba(255, 105, 180, 0.8) 0%, 
+    rgba(218, 112, 214, 0.8) 100%) !important;
+  color: white !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  transform: translateY(-1px) !important;
+}
+
+.friends .danger-button {
+  background: linear-gradient(135deg, #ff1493 0%, #dc143c 100%) !important;
+  border: 2px solid rgba(255, 255, 255, 0.8) !important;
+  color: white !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 25px !important;
+}
+
+/* AttachmentView component styles */
+.friends .attachment-info {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(255, 182, 193, 0.7) 100%);
+  color: #4a154b;
+  border: 2px solid rgba(255, 105, 180, 0.3);
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(255, 192, 203, 0.3);
+}
+
+.friends .attachment-placeholder {
+  background: linear-gradient(135deg, 
+    rgba(255, 182, 193, 0.7) 0%, 
+    rgba(221, 160, 221, 0.7) 100%);
+  border: 2px dashed #ff69b4;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(255, 192, 203, 0.2);
+}
+
+.friends .loading {
+  color: #da70d6;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.friends .attachment-size {
+  color: #ba55d3;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+
+.friends .file-attachment {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(255, 182, 193, 0.7) 100%);
+  border: 2px solid rgba(255, 105, 180, 0.3);
+  color: #4a154b;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(255, 192, 203, 0.3);
+}
+
+.friends .file-size {
+  color: #ba55d3;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+
+.friends .spinner {
+  border-color: rgba(255, 105, 180, 0.3);
+  border-top-color: #ff69b4;
+  box-shadow: 0 0 15px rgba(255, 105, 180, 0.4);
+}
+
+/* Enhanced rainbow status indicators for better readability */
+.friends .status-indicator.status-connected, 
+.friends .status-dot.status-connected { 
+  background: linear-gradient(135deg, #00c851 0%, #00ff7f 100%) !important;
+  box-shadow: 0 0 20px rgba(0, 200, 81, 0.8) !important;
+  border: 2px solid rgba(255, 255, 255, 0.9) !important;
+}
+
+.friends .status-indicator.status-connecting, 
+.friends .status-dot.status-connecting { 
+  background: linear-gradient(135deg, #ff8f00 0%, #ffb347 100%) !important;
+  box-shadow: 0 0 20px rgba(255, 143, 0, 0.8) !important;
+  border: 2px solid rgba(255, 255, 255, 0.9) !important;
+}
+
+.friends .status-indicator.status-failed, 
+.friends .status-dot.status-failed { 
+  background: linear-gradient(135deg, #ff3547 0%, #ff1744 100%) !important;
+  box-shadow: 0 0 20px rgba(255, 53, 71, 0.8) !important;
+  border: 2px solid rgba(255, 255, 255, 0.9) !important;
+}
+
+.friends .status-indicator.status-disconnected, 
+.friends .status-dot.status-disconnected { 
+  background: linear-gradient(135deg, #607d8b 0%, #78909c 100%) !important;
+  box-shadow: 0 0 15px rgba(96, 125, 139, 0.6) !important;
+  border: 2px solid rgba(255, 255, 255, 0.9) !important;
+}
+
+.friends .status-indicator.status-waiting-for-answer,
+.friends .status-dot.status-waiting-for-answer,
+.friends .status-indicator.status-waiting-for-offer,
+.friends .status-dot.status-waiting-for-offer,
+.friends .status-indicator.status-creating-offer,
+.friends .status-dot.status-creating-offer,
+.friends .status-indicator.status-processing-answer,
+.friends .status-dot.status-processing-answer {
+  background: linear-gradient(135deg, #ff8f00 0%, #ffb347 100%) !important;
+  box-shadow: 0 0 20px rgba(255, 143, 0, 0.8) !important;
+  border: 2px solid rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Send button special rainbow styling */
+.friends .send-button.active {
+  background: linear-gradient(135deg, #ff69b4 0%, #da70d6 50%, #ba55d3 100%) !important;
+  color: white !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  border-radius: 25px !important;
+  box-shadow: 0 4px 15px rgba(255, 105, 180, 0.5), 0 0 20px rgba(218, 112, 214, 0.3) !important;
+  animation: rainbow-pulse 2s ease-in-out infinite !important;
+}
+
+@keyframes rainbow-pulse {
+  0%, 100% { 
+    box-shadow: 0 4px 15px rgba(255, 105, 180, 0.5), 0 0 20px rgba(218, 112, 214, 0.3);
+  }
+  50% { 
+    box-shadow: 0 6px 25px rgba(255, 105, 180, 0.7), 0 0 30px rgba(218, 112, 214, 0.5);
+    transform: scale(1.05);
+  }
+}
+
+/* Help text styling */
+.friends .help-text {
+  color: #da70d6 !important;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6) !important;
+  font-weight: 500 !important;
+}
+
+/* Magical notification styling */
+.friends .notification {
+  background: linear-gradient(135deg, 
+    rgba(255, 105, 180, 0.95) 0%, 
+    rgba(218, 112, 214, 0.95) 100%) !important;
+  border: 2px solid rgba(255, 255, 255, 0.8) !important;
+  color: white !important;
+  border-radius: 20px !important;
+  box-shadow: 0 8px 32px rgba(255, 105, 180, 0.6), 0 0 40px rgba(218, 112, 214, 0.4) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  animation: notification-magic 0.5s ease-out !important;
+}
+
+@keyframes notification-magic {
+  0% { 
+    transform: translateY(-20px) scale(0.8); 
+    opacity: 0; 
+  }
+  50% { 
+    transform: translateY(-5px) scale(1.05); 
+  }
+  100% { 
+    transform: translateY(0) scale(1); 
+    opacity: 1; 
+  }
+} 

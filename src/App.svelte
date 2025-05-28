@@ -16,6 +16,7 @@
   
   // Backend related state
   let backendUrl = '';
+  let accountName = ''; // Optional account name from query params
   let isLoadingAccountPackage = false;
   let accountPackage: AccountPackage | null = null;
   let showAccountCreation = false;
@@ -111,6 +112,24 @@
     return urlParams.get('backend') || '';
   }
   
+  // Parse account name from query parameters
+  function parseAccountName(): string {
+    if (!browser) return '';
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('accountname') || '';
+  }
+  
+  // Build scratchpad URL with optional object_name parameter
+  function buildScratchpadUrl(): string {
+    if (!backendUrl) return '';
+    
+    const baseUrl = `${backendUrl}/ant-0/scratchpad-private`;
+    if (accountName) {
+      return `${baseUrl}?object_name=${encodeURIComponent(accountName)}`;
+    }
+    return baseUrl;
+  }
+  
   // Convert JSON to byte array for scratchpad storage
   function jsonToByteArray(jsonString: string): number[] {
     const encoder = new TextEncoder();
@@ -133,8 +152,11 @@
       return null;
     }
     
-    const url = `${backendUrl}/ant-0/scratchpad-private`;
+    const url = buildScratchpadUrl();
     console.log('🌐 Fetching account package from:', url);
+    if (accountName) {
+      console.log('👤 Using account name:', accountName);
+    }
     
     try {
       const response = await fetch(url, {
@@ -188,7 +210,25 @@
       }
     } catch (error) {
       console.error('❌ Error fetching account package:', error);
-      showNotification('Error fetching account package: ' + error);
+      
+      // Check if this is likely an HTTPS certificate error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (backendUrl.startsWith('https://') && 
+          (errorMessage.includes('Failed to fetch') || 
+           errorMessage.includes('NetworkError') ||
+           errorMessage.includes('SEC_ERROR') ||
+           errorMessage.includes('SSL') ||
+           errorMessage.includes('certificate'))) {
+        
+        console.log('🔒 Detected potential HTTPS certificate issue');
+        
+        // Set a special error state to show certificate acceptance dialog
+        accountCreationError = `HTTPS certificate error detected. Please click here to accept the self-signed certificate: ${backendUrl}`;
+        showAccountCreation = true;
+        return null;
+      }
+      
+      showNotification('Error fetching account package: ' + errorMessage);
       return null;
     }
   }
@@ -217,7 +257,7 @@
       console.log('💾 Scratchpad payload:', scratchpadPayload);
       console.log('💾 Account bytes length:', accountBytes.length);
       
-      const response = await fetch(`${backendUrl}/ant-0/scratchpad-private`, {
+      const response = await fetch(buildScratchpadUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -238,7 +278,8 @@
       return true;
     } catch (error) {
       console.error('❌ Error creating account package:', error);
-      accountCreationError = 'Error creating account: ' + error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      accountCreationError = 'Error creating account: ' + errorMessage;
       return false;
     }
   }
@@ -281,7 +322,9 @@
   async function initializeBackend() {
     console.log('🔧 Initializing backend integration...');
     backendUrl = parseBackendUrl();
+    accountName = parseAccountName();
     console.log('🔧 Parsed backend URL:', backendUrl || 'None provided');
+    console.log('🔧 Parsed account name:', accountName || 'None provided');
     
     if (!backendUrl) {
       console.log('✅ No backend URL provided, using P2P mode only');
@@ -348,8 +391,9 @@
         unencrypted_data: accountBytes
       };
       
-      const response = await fetch(`${backendUrl}/ant-0/scratchpad-private`, {
-        method: 'POST',
+      // Use PUT for updating existing scratchpad
+      const response = await fetch(buildScratchpadUrl(), {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Ant-App-ID': 'friends'
@@ -367,7 +411,8 @@
       return true;
     } catch (error) {
       console.error('❌ Error updating account package:', error);
-      showNotification('Error updating account package: ' + error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      showNotification('Error updating account package: ' + errorMessage);
       return false;
     }
   }
@@ -407,6 +452,10 @@
       console.log('✅ Theme loaded successfully:', themeFullUrl);
       // Apply friends class for external themes
       document.documentElement.classList.add('friends');
+      
+      // Initialize theme background if theme defines one - now that CSS is fully loaded
+      initializeThemeBackground();
+      
       showNotification('Theme loaded successfully');
     };
     
@@ -430,6 +479,45 @@
     // Also save to localStorage as fallback
     if (browser) {
       localStorage.setItem('themeUrl', themeUrl);
+    }
+  }
+  
+  // Set theme background image dynamically
+  function setThemeBackground(datamapAddress: string) {
+    if (!browser) return;
+    
+    // Construct the full URL using backend address
+    let backgroundUrl: string;
+    if (datamapAddress.startsWith('http')) {
+      // Full URL provided
+      backgroundUrl = datamapAddress;
+    } else {
+      // Datamap address - construct full URL
+      backgroundUrl = `${backendUrl}/ant-0/data/${datamapAddress}`;
+    }
+    
+    // Set CSS custom property for theme background
+    document.documentElement.style.setProperty(
+      '--theme-background-url', 
+      `url('${backgroundUrl}')`
+    );
+    
+    console.log('🌌 Theme background set to:', backgroundUrl);
+  }
+
+  // Initialize theme background on load
+  function initializeThemeBackground() {
+    if (!browser) return;
+    
+    // Read datamap address from CSS custom property
+    const rootStyle = getComputedStyle(document.documentElement);
+    const datamapAddress = rootStyle.getPropertyValue('--theme-background-datamap').trim().replace(/['"]/g, '');
+    
+    if (datamapAddress && datamapAddress !== '') {
+      console.log('📄 Reading theme background datamap from CSS:', datamapAddress);
+      setThemeBackground(datamapAddress);
+    } else {
+      console.log('⚠️ No theme background datamap found in CSS');
     }
   }
   
@@ -1334,6 +1422,28 @@
         <p>No account package found. Would you like to create one?</p>
         
         <form on:submit|preventDefault={handleAccountCreation}>
+          <!-- Show certificate error with clickable link -->
+          {#if accountCreationError.includes('HTTPS certificate error detected')}
+            <div class="certificate-error">
+              <p><strong>🔒 HTTPS Certificate Issue Detected</strong></p>
+              <p>The backend uses a self-signed certificate. Please click the link below to accept it:</p>
+              <a href={backendUrl} target="_blank" rel="noopener noreferrer" class="certificate-link">
+                {backendUrl}
+              </a>
+              <p><small>After accepting the certificate, close this window and try again.</small></p>
+              <div class="modal-buttons">
+                <button type="button" on:click={cancelAccountCreation} class="secondary-button">
+                  Close
+                </button>
+                <button type="button" on:click={() => {
+                  accountCreationError = '';
+                  initializeBackend();
+                }} class="primary-button">
+                  Try Again
+                </button>
+              </div>
+            </div>
+          {:else}
           <div class="input-group">
             <label for="create-username">Username</label>
             <input 
@@ -1385,6 +1495,7 @@
               {isLoadingAccountPackage ? 'Creating...' : 'Create Account'}
             </button>
           </div>
+          {/if}
         </form>
       </div>
     </div>
@@ -1430,6 +1541,11 @@
               {#if backendUrl}
                 <div class="account-field">
                   <strong>Backend:</strong> {backendUrl}
+                </div>
+              {/if}
+              {#if accountName}
+                <div class="account-field">
+                  <strong>Account Name:</strong> {accountName}
                 </div>
               {/if}
             </div>
@@ -2500,5 +2616,47 @@
     color: #6c757d;
   }
   
-
+  /* Certificate error styles */
+  .certificate-error {
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+  
+  .certificate-error p {
+    margin: 0.5rem 0;
+    line-height: 1.4;
+  }
+  
+  .certificate-error strong {
+    color: #856404;
+    font-size: 1.1rem;
+  }
+  
+  .certificate-link {
+    display: inline-block;
+    background: #0d6efd;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.9rem;
+    margin: 1rem 0;
+    word-break: break-all;
+    transition: background-color 0.2s;
+  }
+  
+  .certificate-link:hover {
+    background: #0b5ed7;
+    text-decoration: none;
+  }
+  
+  .certificate-error small {
+    color: #856404;
+    font-style: italic;
+  }
 </style> 
