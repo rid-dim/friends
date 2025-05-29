@@ -27,6 +27,10 @@
   };
   let accountCreationError = '';
   
+  // Public scratchpad for peer communication
+  let myPeerId = ''; // scratchpad_address from public scratchpad
+  let isLoadingPeerId = false;
+  
   // WebRTC related variables
   let peerConnection: RTCPeerConnection | null = null;
   let dataChannel: RTCDataChannel | null = null;
@@ -128,6 +132,22 @@
       return `${baseUrl}?object_name=${encodeURIComponent(accountName)}`;
     }
     return baseUrl;
+  }
+  
+  // Build communication object name for public scratchpad
+  function buildCommObjectName(): string {
+    if (accountName) {
+      return `comm${accountName}`;
+    }
+    return 'comm';
+  }
+  
+  // Build public scratchpad URL for peer communication
+  function buildPublicScratchpadUrl(): string {
+    if (!backendUrl) return '';
+    
+    const objectName = buildCommObjectName();
+    return `${backendUrl}/ant-0/scratchpad-public?object_name=${encodeURIComponent(objectName)}`;
   }
   
   // Convert JSON to byte array for scratchpad storage
@@ -361,6 +381,11 @@
     } finally {
       isLoadingAccountPackage = false;
       console.log('🔧 Backend initialization complete');
+    }
+    
+    // Initialize peer communication after account package setup
+    if (backendUrl) {
+      await initializePeerCommunication();
     }
   }
   
@@ -1371,6 +1396,122 @@
     }
   }
   
+  // Initialize public scratchpad for peer communication
+  async function initializePeerCommunication(): Promise<void> {
+    if (!backendUrl) {
+      console.log('🚫 No backend URL - skipping peer communication setup');
+      return;
+    }
+    
+    const url = buildPublicScratchpadUrl();
+    const commObjectName = buildCommObjectName();
+    console.log('🌐 Initializing peer communication:', url);
+    console.log('📡 Communication object name:', commObjectName);
+    
+    isLoadingPeerId = true;
+    
+    try {
+      // Try to GET existing public scratchpad
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'Ant-App-ID': 'friends'
+        }
+      });
+      
+      console.log('📡 Public scratchpad response status:', response.status);
+      
+      if (response.ok) {
+        // Extract scratchpad_address from existing scratchpad
+        const scratchpadData = await response.json();
+        console.log('📦 Public scratchpad data:', scratchpadData);
+        
+        let chunk = null;
+        if (Array.isArray(scratchpadData) && scratchpadData.length > 0) {
+          chunk = scratchpadData[0];
+        } else if (scratchpadData && scratchpadData.dweb_type === "PublicScratchpad") {
+          chunk = scratchpadData;
+        }
+        
+        if (chunk && chunk.scratchpad_address) {
+          myPeerId = chunk.scratchpad_address;
+          console.log('✅ Retrieved peer ID:', myPeerId);
+        } else {
+          console.warn('⚠️ No valid scratchpad_address found');
+        }
+      } else if (response.status === 404) {
+        // Create new public scratchpad
+        console.log('📭 Public scratchpad not found, creating new one...');
+        await createPublicScratchpad();
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('❌ Error initializing peer communication:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      showNotification('Error initializing peer communication: ' + errorMessage);
+    } finally {
+      isLoadingPeerId = false;
+    }
+  }
+  
+  // Create new public scratchpad for peer communication
+  async function createPublicScratchpad(): Promise<void> {
+    if (!backendUrl) return;
+    
+    const url = buildPublicScratchpadUrl();
+    console.log('💾 Creating public scratchpad at:', url);
+    
+    try {
+      // Create basic peer info data
+      const peerInfo = {
+        type: 'peer-communication',
+        createdAt: new Date().toISOString(),
+        accountName: accountName || null
+      };
+      
+      const peerInfoJson = JSON.stringify(peerInfo);
+      const peerInfoBytes = jsonToByteArray(peerInfoJson);
+      
+      // Wrap in public scratchpad format
+      const scratchpadPayload = {
+        counter: 0,
+        data_encoding: 0,
+        dweb_type: "PublicScratchpad",
+        encryped_data: [0],
+        scratchpad_address: "string",
+        unencrypted_data: peerInfoBytes
+      };
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Ant-App-ID': 'friends'
+        },
+        body: JSON.stringify(scratchpadPayload)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const createdScratchpad = await response.json();
+      console.log('✅ Created public scratchpad:', createdScratchpad);
+      
+      // Extract scratchpad_address from created scratchpad
+      if (createdScratchpad && createdScratchpad.scratchpad_address) {
+        myPeerId = createdScratchpad.scratchpad_address;
+        console.log('✅ New peer ID:', myPeerId);
+      }
+    } catch (error) {
+      console.error('❌ Error creating public scratchpad:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      showNotification('Error creating public scratchpad: ' + errorMessage);
+    }
+  }
+  
   onMount(() => {
     // Initialize backend integration first
     initializeBackend();
@@ -1743,9 +1884,29 @@
     <div class="chat">
       <div class="chat-header" class:config-visible={showConfig}>
         <h1>WebRTC P2P Chat</h1>
-        <div class="connection-indicator">
-          <span class="status-dot status-{connectionState}"></span>
-          <span>{connectionState === 'connected' ? 'Connected' : 'Not Connected'}</span>
+        <div class="header-info">
+          {#if myPeerId}
+            <div class="peer-id-display">
+              <span class="peer-id-label">My ID:</span>
+              <button 
+                class="peer-id-value" 
+                on:click={() => copyToClipboard(myPeerId)}
+                title="Click to copy peer ID"
+              >
+                {myPeerId}
+              </button>
+            </div>
+          {:else if isLoadingPeerId}
+            <div class="peer-id-display">
+              <span class="peer-id-label">My ID:</span>
+              <span class="peer-id-loading">Loading...</span>
+            </div>
+          {/if}
+          
+          <div class="connection-indicator">
+            <span class="status-dot status-{connectionState}"></span>
+            <span>{connectionState === 'connected' ? 'Connected' : 'Not Connected'}</span>
+          </div>
         </div>
       </div>
       
@@ -2081,13 +2242,54 @@
   
   /* Reset chat-header padding when config is visible */
   .chat-header.config-visible {
-    padding-left: 1rem;
+    padding-left: 0.75rem; /* Even less when config is visible on mobile */
   }
   
-  .chat-header h1 {
-    margin: 0;
-    font-size: 1.25rem;
-    color: #212529;
+  .header-info {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  
+  .peer-id-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+  
+  .peer-id-label {
+    color: #495057;
+    font-weight: 600;
+  }
+  
+  .peer-id-value {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    background: #e7f3ff;
+    color: #0066cc;
+    border: 1px solid #b6d7ff;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .peer-id-value:hover {
+    background: #d1ecf1;
+    border-color: #bee5eb;
+  }
+  
+  .peer-id-loading {
+    color: #6c757d;
+    font-style: italic;
+    font-size: 0.8rem;
   }
   
   .connection-indicator {
@@ -2342,6 +2544,19 @@
       flex-direction: row;
       justify-content: space-between;
     align-items: center;
+    }
+    
+    /* Mobile header layout overrides */
+    .header-info {
+      width: 100% !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 0.5rem !important;
+      justify-content: flex-start !important;
+    }
+    
+    .peer-id-value {
+      max-width: 120px !important;
     }
   }
 
