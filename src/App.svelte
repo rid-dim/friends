@@ -27,6 +27,17 @@
   };
   let accountCreationError = '';
   
+  // Public scratchpad for peer communication
+  let myPeerId = ''; // scratchpad_address from public scratchpad
+  let isLoadingPeerId = false;
+  
+  // WebRTC Handshake via handshake-server
+  let otherPeerId = ''; // The peer ID we want to connect to
+  let handshakeServerUrl = 'https://handshake.autonomi.space';
+  let handshakeInterval: ReturnType<typeof setInterval> | null = null;
+  let isHandshaking = false;
+  let handshakeStatus = '';
+  
   // WebRTC related variables
   let peerConnection: RTCPeerConnection | null = null;
   let dataChannel: RTCDataChannel | null = null;
@@ -130,6 +141,22 @@
     return baseUrl;
   }
   
+  // Build communication object name for public scratchpad
+  function buildCommObjectName(): string {
+    if (accountName) {
+      return `comm${accountName}`;
+    }
+    return 'comm';
+  }
+  
+  // Build public scratchpad URL for peer communication
+  function buildPublicScratchpadUrl(): string {
+    if (!backendUrl) return '';
+    
+    const objectName = buildCommObjectName();
+    return `${backendUrl}/ant-0/scratchpad-public?object_name=${encodeURIComponent(objectName)}`;
+  }
+  
   // Convert JSON to byte array for scratchpad storage
   function jsonToByteArray(jsonString: string): number[] {
     const encoder = new TextEncoder();
@@ -143,6 +170,57 @@
     const decoder = new TextDecoder();
     const jsonString = decoder.decode(uint8Array);
     return JSON.parse(jsonString);
+  }
+  
+  // Handshake server helper functions
+  async function putHandshakeData(scratchpadAddress: string, data: any): Promise<boolean> {
+    try {
+      const jsonData = JSON.stringify(data);
+      const encoder = new TextEncoder();
+      const binaryData = encoder.encode(jsonData);
+      
+      const response = await fetch(`${handshakeServerUrl}/${scratchpadAddress}`, {
+        method: 'PUT',
+        body: binaryData,
+        headers: {
+          'Content-Type': 'application/octet-stream'
+        }
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.error('Error putting handshake data:', error);
+      return false;
+    }
+  }
+  
+  async function getHandshakeData(scratchpadAddress: string): Promise<any | null> {
+    try {
+      const response = await fetch(`${handshakeServerUrl}/${scratchpadAddress}`, {
+        method: 'GET'
+      });
+      
+      if (!response.ok) {
+        return null;
+      }
+      
+      const binaryData = await response.arrayBuffer();
+      if (binaryData.byteLength === 0) {
+        return null;
+      }
+      
+      const decoder = new TextDecoder();
+      const jsonString = decoder.decode(binaryData);
+      return JSON.parse(jsonString);
+    } catch (error) {
+      console.error('Error getting handshake data:', error);
+      return null;
+    }
+  }
+  
+  // Determine if we have priority based on peer ID comparison
+  function havePriority(myId: string, otherId: string): boolean {
+    return myId > otherId;
   }
   
   // Fetch account package from backend
@@ -362,6 +440,11 @@
       isLoadingAccountPackage = false;
       console.log('🔧 Backend initialization complete');
     }
+    
+    // Initialize peer communication after account package setup
+    if (backendUrl) {
+      await initializePeerCommunication();
+    }
   }
   
   // Update account package on backend
@@ -566,6 +649,7 @@
         case 'connected':
           connectionState = 'connected';
           showNotification('WebRTC connected!');
+          stopHandshake(); // Stop handshake process when connected
           break;
         case 'disconnected':
         case 'failed':
@@ -589,6 +673,7 @@
         case 'connected':
         case 'completed':
           console.log('ICE connection established/optimized successfully!');
+          stopHandshake(); // Stop handshake process when connected
           break;
         case 'disconnected':
           console.warn('ICE connection temporarily disconnected - may recover');
@@ -1034,6 +1119,7 @@
     }
     
     stopOfferRefresh(); // Stop any running offer refresh
+    stopHandshake(); // Stop handshake process
     
     connectionState = 'disconnected';
     showOfferAnswer = false;
@@ -1046,6 +1132,247 @@
     incomingFiles = {};
     
     // No more manual heartbeat tracking needed - using native WebRTC monitoring
+  }
+  
+  // Start automatic WebRTC handshake process
+  function startHandshake() {
+    if (!myPeerId || !otherPeerId) {
+      showNotification('Please enter both peer IDs');
+      return;
+    }
+    
+    if (handshakeInterval) {
+      clearInterval(handshakeInterval);
+    }
+    
+    isHandshaking = true;
+    handshakeStatus = 'Starting handshake...';
+    console.log('🤝 Starting WebRTC handshake process');
+    console.log(`📊 My ID: ${myPeerId}, Other ID: ${otherPeerId}`);
+    console.log(`📊 I have priority: ${havePriority(myPeerId, otherPeerId)}`);
+    
+    // Run handshake check immediately
+    performHandshakeCheck();
+    
+    // Then check every second
+    handshakeInterval = setInterval(() => {
+      performHandshakeCheck();
+    }, 1000);
+  }
+  
+  // Stop handshake process
+  function stopHandshake() {
+    if (handshakeInterval) {
+      clearInterval(handshakeInterval);
+      handshakeInterval = null;
+    }
+    isHandshaking = false;
+    handshakeStatus = '';
+    console.log('🛑 Stopped handshake process');
+  }
+  
+  // Perform handshake check based on current time and priority
+  async function performHandshakeCheck() {
+    if (connectionState === 'connected') {
+      stopHandshake();
+      return;
+    }
+    
+    const now = new Date();
+    const seconds = now.getSeconds();
+    const hasPriority = havePriority(myPeerId, otherPeerId);
+    
+    if (hasPriority) {
+      // We have priority - create offer at full minute
+      if (seconds === 0) {
+        await createHandshakeOffer();
+      }
+      // Check for answer at 6 seconds after full minute
+      else if (seconds === 6) {
+        await checkForHandshakeAnswer();
+      }
+    } else {
+      // We don't have priority - check for offer at 3 seconds after full minute
+      if (seconds === 3) {
+        await checkForHandshakeOffer();
+      }
+    }
+  }
+  
+  // Create and publish offer via handshake server
+  async function createHandshakeOffer() {
+    console.log('🎯 Creating handshake offer at full minute');
+    handshakeStatus = 'Creating offer...';
+    
+    // Reset any existing connection
+    if (peerConnection) {
+      peerConnection.close();
+    }
+    
+    const pc = initializePeerConnection();
+    if (!pc) return;
+    
+    // Create data channel
+    dataChannel = pc.createDataChannel('chat', {
+      ordered: true
+    });
+    setupDataChannel(dataChannel);
+    
+    try {
+      // Create offer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      
+      // Wait for ICE gathering to complete
+      await new Promise<void>((resolve) => {
+        if (pc.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') {
+              resolve();
+            }
+          };
+        }
+      });
+      
+      // Publish offer to handshake server
+      const handshakeData = {
+        [otherPeerId]: pc.localDescription
+      };
+      
+      const success = await putHandshakeData(myPeerId, handshakeData);
+      if (success) {
+        console.log('✅ Offer published to handshake server');
+        handshakeStatus = 'Offer published, waiting for answer...';
+        connectionState = 'waiting-for-answer';
+      } else {
+        console.error('❌ Failed to publish offer');
+        handshakeStatus = 'Failed to publish offer';
+      }
+    } catch (error) {
+      console.error('Error creating handshake offer:', error);
+      handshakeStatus = 'Error creating offer';
+    }
+  }
+  
+  // Check for offer from other peer
+  async function checkForHandshakeOffer() {
+    console.log('🔍 Checking for offer from other peer');
+    handshakeStatus = 'Checking for offer...';
+    
+    try {
+      const handshakeData = await getHandshakeData(otherPeerId);
+      if (!handshakeData || !handshakeData[myPeerId]) {
+        console.log('No offer found yet');
+        return;
+      }
+      
+      console.log('📨 Found offer from other peer!');
+      const offer = handshakeData[myPeerId];
+      
+      // Process the offer and create answer
+      await processHandshakeOffer(offer);
+    } catch (error) {
+      console.error('Error checking for offer:', error);
+      handshakeStatus = 'Error checking for offer';
+    }
+  }
+  
+  // Process offer and create answer
+  async function processHandshakeOffer(offer: RTCSessionDescriptionInit) {
+    console.log('🎯 Processing offer and creating answer');
+    handshakeStatus = 'Processing offer...';
+    
+    // Reset any existing connection
+    if (peerConnection) {
+      peerConnection.close();
+    }
+    
+    const pc = initializePeerConnection();
+    if (!pc) return;
+    
+    try {
+      await pc.setRemoteDescription(offer);
+      
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      
+      // Wait for ICE gathering to complete
+      await new Promise<void>((resolve) => {
+        if (pc.iceGatheringState === 'complete') {
+          resolve();
+        } else {
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') {
+              resolve();
+            }
+          };
+        }
+      });
+      
+      // Publish answer to handshake server
+      const handshakeData = {
+        [otherPeerId]: pc.localDescription
+      };
+      
+      const success = await putHandshakeData(myPeerId, handshakeData);
+      if (success) {
+        console.log('✅ Answer published to handshake server');
+        handshakeStatus = 'Answer published, connecting...';
+        connectionState = 'connecting';
+      } else {
+        console.error('❌ Failed to publish answer');
+        handshakeStatus = 'Failed to publish answer';
+      }
+    } catch (error) {
+      console.error('Error processing offer:', error);
+      handshakeStatus = 'Error processing offer';
+    }
+  }
+  
+  // Check for answer from other peer
+  async function checkForHandshakeAnswer() {
+    console.log('🔍 Checking for answer from other peer');
+    handshakeStatus = 'Checking for answer...';
+    
+    try {
+      const handshakeData = await getHandshakeData(otherPeerId);
+      if (!handshakeData || !handshakeData[myPeerId]) {
+        console.log('No answer found yet');
+        return;
+      }
+      
+      console.log('📨 Found answer from other peer!');
+      const answer = handshakeData[myPeerId];
+      
+      // Process the answer
+      await processHandshakeAnswer(answer);
+    } catch (error) {
+      console.error('Error checking for answer:', error);
+      handshakeStatus = 'Error checking for answer';
+    }
+  }
+  
+  // Process answer from other peer
+  async function processHandshakeAnswer(answer: RTCSessionDescriptionInit) {
+    if (!peerConnection) {
+      console.error('No peer connection available');
+      return;
+    }
+    
+    console.log('🎯 Processing answer from other peer');
+    handshakeStatus = 'Processing answer...';
+    
+    try {
+      await peerConnection.setRemoteDescription(answer);
+      connectionState = 'connecting';
+      handshakeStatus = 'Answer processed, connecting...';
+      console.log('✅ Answer processed successfully');
+    } catch (error) {
+      console.error('Error processing answer:', error);
+      handshakeStatus = 'Error processing answer';
+    }
   }
   
   function handleKeydown(event: KeyboardEvent) {
@@ -1371,6 +1698,122 @@
     }
   }
   
+  // Initialize public scratchpad for peer communication
+  async function initializePeerCommunication(): Promise<void> {
+    if (!backendUrl) {
+      console.log('🚫 No backend URL - skipping peer communication setup');
+      return;
+    }
+    
+    const url = buildPublicScratchpadUrl();
+    const commObjectName = buildCommObjectName();
+    console.log('🌐 Initializing peer communication:', url);
+    console.log('📡 Communication object name:', commObjectName);
+    
+    isLoadingPeerId = true;
+    
+    try {
+      // Try to GET existing public scratchpad
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'Ant-App-ID': 'friends'
+        }
+      });
+      
+      console.log('📡 Public scratchpad response status:', response.status);
+      
+      if (response.ok) {
+        // Extract scratchpad_address from existing scratchpad
+        const scratchpadData = await response.json();
+        console.log('📦 Public scratchpad data:', scratchpadData);
+        
+        let chunk = null;
+        if (Array.isArray(scratchpadData) && scratchpadData.length > 0) {
+          chunk = scratchpadData[0];
+        } else if (scratchpadData && scratchpadData.dweb_type === "PublicScratchpad") {
+          chunk = scratchpadData;
+        }
+        
+        if (chunk && chunk.scratchpad_address) {
+          myPeerId = chunk.scratchpad_address;
+          console.log('✅ Retrieved peer ID:', myPeerId);
+        } else {
+          console.warn('⚠️ No valid scratchpad_address found');
+        }
+      } else if (response.status === 404) {
+        // Create new public scratchpad
+        console.log('📭 Public scratchpad not found, creating new one...');
+        await createPublicScratchpad();
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('❌ Error initializing peer communication:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      showNotification('Error initializing peer communication: ' + errorMessage);
+    } finally {
+      isLoadingPeerId = false;
+    }
+  }
+  
+  // Create new public scratchpad for peer communication
+  async function createPublicScratchpad(): Promise<void> {
+    if (!backendUrl) return;
+    
+    const url = buildPublicScratchpadUrl();
+    console.log('💾 Creating public scratchpad at:', url);
+    
+    try {
+      // Create basic peer info data
+      const peerInfo = {
+        type: 'peer-communication',
+        createdAt: new Date().toISOString(),
+        accountName: accountName || null
+      };
+      
+      const peerInfoJson = JSON.stringify(peerInfo);
+      const peerInfoBytes = jsonToByteArray(peerInfoJson);
+      
+      // Wrap in public scratchpad format
+      const scratchpadPayload = {
+        counter: 0,
+        data_encoding: 0,
+        dweb_type: "PublicScratchpad",
+        encryped_data: [0],
+        scratchpad_address: "string",
+        unencrypted_data: peerInfoBytes
+      };
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Ant-App-ID': 'friends'
+        },
+        body: JSON.stringify(scratchpadPayload)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const createdScratchpad = await response.json();
+      console.log('✅ Created public scratchpad:', createdScratchpad);
+      
+      // Extract scratchpad_address from created scratchpad
+      if (createdScratchpad && createdScratchpad.scratchpad_address) {
+        myPeerId = createdScratchpad.scratchpad_address;
+        console.log('✅ New peer ID:', myPeerId);
+      }
+    } catch (error) {
+      console.error('❌ Error creating public scratchpad:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      showNotification('Error creating public scratchpad: ' + errorMessage);
+    }
+  }
+  
   onMount(() => {
     // Initialize backend integration first
     initializeBackend();
@@ -1396,6 +1839,7 @@
     return () => {
       resetConnection();
       stopOfferRefresh();
+      stopHandshake(); // Stop handshake process on cleanup
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       document.removeEventListener('mousemove', resize);
       document.removeEventListener('mouseup', stopResize);
@@ -1660,6 +2104,65 @@
             </span>
           </div>
           
+          {#if myPeerId}
+            <div class="peer-id-section">
+              <div class="input-group">
+                <label for="other-peer-id">Peer ID to connect to</label>
+                <input 
+                  id="other-peer-id"
+                  bind:value={otherPeerId}
+                  placeholder="Enter peer's scratchpad address"
+                  disabled={connectionState === 'connected' || isHandshaking}
+                />
+                <small class="help-text">Enter the scratchpad address of the peer you want to connect to</small>
+              </div>
+              
+              {#if otherPeerId && myPeerId}
+                <div class="handshake-info">
+                  <p class="priority-info">
+                    {#if havePriority(myPeerId, otherPeerId)}
+                      <span class="priority-badge high">You have priority</span>
+                      <small>You will create offers at every full minute</small>
+                    {:else}
+                      <span class="priority-badge low">Peer has priority</span>
+                      <small>You will check for offers 3 seconds after full minute</small>
+                    {/if}
+                  </p>
+                </div>
+              {/if}
+              
+              {#if isHandshaking}
+                <div class="handshake-status">
+                  <div class="spinner-small"></div>
+                  <span>{handshakeStatus}</span>
+                </div>
+              {/if}
+              
+              {#if connectionState === 'disconnected' || connectionState === 'failed'}
+                <div class="button-group">
+                  <button 
+                    on:click={startHandshake} 
+                    class="primary-button"
+                    disabled={!myPeerId || !otherPeerId || isHandshaking}
+                  >
+                    {isHandshaking ? 'Handshaking...' : 'Start Auto-Connect'}
+                  </button>
+                  {#if isHandshaking}
+                    <button on:click={stopHandshake} class="secondary-button">
+                      Stop
+                    </button>
+                  {/if}
+                </div>
+                
+                <div class="divider">
+                  <span>or connect manually</span>
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <p class="help-text">Waiting for peer ID initialization...</p>
+          {/if}
+          
           {#if connectionState === 'disconnected' || connectionState === 'failed'}
         <div class="button-group">
               <button on:click={startAsInitiator} class="primary-button">
@@ -1743,9 +2246,29 @@
     <div class="chat">
       <div class="chat-header" class:config-visible={showConfig}>
         <h1>WebRTC P2P Chat</h1>
-        <div class="connection-indicator">
-          <span class="status-dot status-{connectionState}"></span>
-          <span>{connectionState === 'connected' ? 'Connected' : 'Not Connected'}</span>
+        <div class="header-info">
+          {#if myPeerId}
+            <div class="peer-id-display">
+              <span class="peer-id-label">My ID:</span>
+              <button 
+                class="peer-id-value" 
+                on:click={() => copyToClipboard(myPeerId)}
+                title="Click to copy peer ID"
+              >
+                {myPeerId}
+              </button>
+            </div>
+          {:else if isLoadingPeerId}
+            <div class="peer-id-display">
+              <span class="peer-id-label">My ID:</span>
+              <span class="peer-id-loading">Loading...</span>
+            </div>
+          {/if}
+          
+          <div class="connection-indicator">
+            <span class="status-dot status-{connectionState}"></span>
+            <span>{connectionState === 'connected' ? 'Connected' : 'Not Connected'}</span>
+          </div>
         </div>
       </div>
       
@@ -2081,13 +2604,54 @@
   
   /* Reset chat-header padding when config is visible */
   .chat-header.config-visible {
-    padding-left: 1rem;
+    padding-left: 0.75rem; /* Even less when config is visible on mobile */
   }
   
-  .chat-header h1 {
-    margin: 0;
-    font-size: 1.25rem;
-    color: #212529;
+  .header-info {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  
+  .peer-id-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+  
+  .peer-id-label {
+    color: #495057;
+    font-weight: 600;
+  }
+  
+  .peer-id-value {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    background: #e7f3ff;
+    color: #0066cc;
+    border: 1px solid #b6d7ff;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .peer-id-value:hover {
+    background: #d1ecf1;
+    border-color: #bee5eb;
+  }
+  
+  .peer-id-loading {
+    color: #6c757d;
+    font-style: italic;
+    font-size: 0.8rem;
   }
   
   .connection-indicator {
@@ -2342,6 +2906,19 @@
       flex-direction: row;
       justify-content: space-between;
     align-items: center;
+    }
+    
+    /* Mobile header layout overrides */
+    .header-info {
+      width: 100% !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 0.5rem !important;
+      justify-content: flex-start !important;
+    }
+    
+    .peer-id-value {
+      max-width: 120px !important;
     }
   }
 
@@ -2657,6 +3234,99 @@
   
   .certificate-error small {
     color: #856404;
+    font-style: italic;
+  }
+  
+  /* Handshake UI styles */
+  .peer-id-section {
+    margin-top: 1rem;
+  }
+  
+  .handshake-info {
+    margin: 1rem 0;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+  }
+  
+  .priority-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+  }
+  
+  .priority-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  
+  .priority-badge.high {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+  }
+  
+  .priority-badge.low {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+  
+  .priority-info small {
+    color: #6c757d;
+    font-size: 0.8rem;
+    margin-left: 0.25rem;
+  }
+  
+  .handshake-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: #e7f3ff;
+    border: 1px solid #b6d7ff;
+    border-radius: 6px;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+    color: #0066cc;
+  }
+  
+  .spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #b6d7ff;
+    border-top: 2px solid #0066cc;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  .divider {
+    text-align: center;
+    margin: 1.5rem 0 1rem;
+    position: relative;
+  }
+  
+  .divider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #dee2e6;
+  }
+  
+  .divider span {
+    background: #f8f9fa;
+    padding: 0 1rem;
+    position: relative;
+    color: #6c757d;
+    font-size: 0.85rem;
     font-style: italic;
   }
 </style> 
