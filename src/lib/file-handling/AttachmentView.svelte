@@ -17,7 +17,7 @@
   $: isImage = attachment.type === 'image';
   $: isVideo = attachment.type === 'video';
   $: isFile = attachment.type === 'file';
-  $: isComplete = attachment.complete === true && !!attachment.data;
+  $: isComplete = attachment.complete === true && (attachment.data !== undefined && attachment.data !== null);
   $: imageSource = isComplete && isImage ? `data:${attachment.mimeType};base64,${attachment.data}` : '';
   $: videoSource = isComplete && isVideo ? URL.createObjectURL(base64ToBlob(attachment.data!, attachment.mimeType)) : '';
   
