@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { translations } from '../i18n/translations';
   import AttachmentView from '../file-handling/AttachmentView.svelte';
   import FileUploader from '../file-handling/FileUploader.svelte';
   import type { FileAttachment } from '../file-handling/types';
@@ -16,6 +17,7 @@
   export let isConnected: boolean = false;
   export let friendName: string = '';
   export let friendPeerId: string = '';
+  export let language: 'en' | 'de' = 'en';
   
   const dispatch = createEventDispatcher();
   
@@ -55,7 +57,7 @@
   
   function copyPeerId(peerId: string) {
     navigator.clipboard.writeText(peerId);
-    dispatch('notification', 'Friend\'s Peer ID copied!');
+    dispatch('notification', translations[language].peerIdCopied);
   }
   
   function handleFileSelect(event: Event) {
@@ -88,12 +90,14 @@
   $: if (messages.length) {
     scrollToBottom();
   }
+  
+  $: t = translations[language];
 </script>
 
 <div class="chat">
   <div class="chat-header">
     <div class="friend-info">
-      <h2>{friendName || 'Select a friend'}</h2>
+      <h2>{friendName || t.selectFriend}</h2>
       {#if friendPeerId && friendName}
         <div class="friend-peer-id">
           <span class="label">ID:</span>
@@ -105,14 +109,14 @@
     </div>
     <div class="connection-indicator">
       <span class="status-dot" class:connected={isConnected}></span>
-      <span>{isConnected ? 'Connected' : 'Not Connected'}</span>
+      <span>{isConnected ? t.connected : t.notConnected}</span>
     </div>
   </div>
   
   <div class="messages" bind:this={messagesContainer}>
     {#if messages.length === 0}
       <div class="empty-chat">
-        <p>No messages yet. Start a conversation!</p>
+        <p>{t.noMessages}</p>
       </div>
     {:else}
       {#each messages as message}
@@ -142,7 +146,7 @@
       <textarea
         bind:value={messageInput}
         on:keydown={handleKeydown}
-        placeholder={isConnected ? 'Type a message...' : 'Connect first to send messages'}
+        placeholder={isConnected ? t.typeMessage : t.connectFirst}
         disabled={!isConnected}
         rows="2"
       ></textarea>
@@ -152,7 +156,6 @@
           disabled={!isConnected}
           on:fileSelected={({detail}) => {
             pendingAttachment = detail.attachment;
-            dispatch('notification', 'File selected: ' + detail.attachment.name);
           }}
           on:error={({detail}) => {
             dispatch('notification', detail);
@@ -172,7 +175,7 @@
           class="send-button"
           class:active={isConnected && (messageInput.trim() || pendingAttachment)}
         >
-          Send
+          {t.send}
         </button>
       </div>
     </div>

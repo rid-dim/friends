@@ -1,51 +1,100 @@
 # P2P Chat Application
 
-A decentralized peer-to-peer chat application that enables secure, private communication between friends using WebRTC for direct browser-to-browser communication and the Autonomi Network for contact establishment.
+## Installation & Start
+
+To start the P2P chat application, you first need to install the `dweb` command line tool:
+
+```bash
+cargo install --locked dweb-cli
+```
+
+For detailed installation instructions, please visit the [dweb repository](https://codeberg.org/happybeing/dweb).
+
+After installation, you can start the application with:
+
+```bash
+dweb open a447871043968be2be1628584026cad30b824009a30eab43db3ee6dd8c0990051c27160cc8d1662da763d57c41c091f6
+```
 
 ## Features
 
-- **Direct P2P Communication**: WebRTC-based peer-to-peer messaging between browsers
-- **Autonomi Network Integration**: Uses Autonomi Network scratchpads for contact handshake and account management
-- **Account Packages**: Store user profiles (username, avatar) on the Autonomi Network
-- **Dark/Light Mode**: User-friendly interface with theme support
-- **File Sharing**: Support for sending files and images directly between peers
-- **Desktop Notifications**: Get notified of new messages when the tab is in the background
-- **Connection Monitoring**: Native WebRTC connection state monitoring for reliable communication
+The P2P chat application enables direct peer-to-peer communication between users via WebRTC. Here are the main features:
 
-## Architecture
+### Account Management
+- **Account Package**: All user settings are stored in an encrypted account package
+- **Profile Picture**: Support for custom profile pictures via datamap addresses
+- **Themes**: Customizable themes with background image support
+- **Multilingual**: Support for multiple languages (English, German, French, Spanish, Bulgarian, Japanese, Korean, Chinese)
 
-The application uses a hybrid approach combining WebRTC and the Autonomi Network:
+### Communication
+- **WebRTC P2P**: Direct encrypted connections between users
+- **Automatic Connection**: Intelligent handshake system for reliable peer connections
+- **File Transfer**: Support for file exchange between users
 
-```mermaid
-graph TB
-    A[Browser A] <--> |WebRTC P2P| B[Browser B]
-    A <--> |HTTPS API| C[Autonomi Network]
-    B <--> |HTTPS API| C
-    
-    subgraph "Autonomi Network"
-        C --> D[Account Packages]
-        C --> E[Contact Handshake]
-        C --> F[Profile Data]
-    end
-```
+### User Interface
+- **Friends List**: Clear contact management
+- **Chat Window**: Real-time message exchange with emoji support
+- **Connection Status**: Real-time connection status display
 
-- **WebRTC**: Direct browser-to-browser communication for real-time messaging and file transfer
-- **Autonomi Network**: Decentralized storage for account packages and contact establishment
-- **Scratchpads**: Used for storing user profiles and facilitating initial contact between peers
+## Usage
 
+### Getting Started
+1. **Create Account**: 
+   - You'll be prompted to create an account on first launch
+   - Enter a username
+   - Optionally set a profile picture and theme
 
-## Account Package Format
+2. **Add Friends**:
+   - Click on "Add Friend"
+   - Enter the friend's peer ID
+   - Set a display name
 
-Account packages are stored in the Autonomi Network using the scratchpad format:
+### Chat
+1. **Start Chat**:
+   - Select a friend from the list
+   - Chat window opens automatically
+   - Connection establishes automatically
 
-```json
-{
-  "username": "your-username",
-  "profileImage": "datamap-address-for-avatar"
-}
-```
+2. **Send Messages**:
+   - Enter text in the input field
+   - Press Enter or click send
+   - Files can be sent via attachment button
 
+### Settings
+1. **Customize Profile**:
+   - Change profile picture via datamap address
+   - Select and customize theme
+   - Change interface language
 
-## License
+2. **Notifications**:
+   - Unread messages are displayed in the friends list
 
-MIT License - see [LICENSE](LICENSE) file for details.
+## Technical Details
+
+The application uses the following technologies:
+- **Svelte**: Frontend framework
+- **WebRTC**: Peer-to-peer communication
+- **Autonomi Network**: Decentralized backend
+
+## Security
+
+- All connections are end-to-end encrypted via WebRTC
+- Account packages are stored encrypted on the autonomi network
+- No central data storage
+- No central server for communication
+
+## Troubleshooting
+
+### Connection Issues
+- Check your internet connection
+- Ensure the peer ID is correct
+- Wait for automatic reconnect (60-second interval)
+
+### File Transfer
+- Maximum file size: 50MB
+- If problems occur: Try sending the file again
+- Supported file types: All
+
+## Contributing
+
+Suggestions for improvements and bug reports are welcome! Please use the Issues function in the repository.

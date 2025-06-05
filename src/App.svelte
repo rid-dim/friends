@@ -7,6 +7,7 @@
   import FriendsList from './lib/components/FriendsList.svelte';
   import Chat from './lib/components/Chat.svelte';
   import type { Friend } from './lib/components/FriendsList.svelte';
+  import AccountSettings from './lib/components/AccountSettings.svelte';
   
   // Import WebRTC and file handling
   import { ConnectionManager } from './lib/webrtc/ConnectionManager';
@@ -15,11 +16,15 @@
   // Import styles
   import './lib/styles/theme.css';
   
+  // Import translations
+  import { translations } from './lib/i18n/translations';
+  
   // Backend and account package related types
   interface AccountPackage {
     username: string;
-    profileImage?: string;
-    themeUrl?: string;
+    profileImage?: string; // datamap address
+    themeUrl?: string; // theme URL
+    language?: 'en' | 'de';
     friends?: Array<{
       peerId: string;
       displayName: string;
@@ -37,7 +42,8 @@
   let accountCreationForm = {
     username: '',
     profileImage: '',
-    themeUrl: 'default'
+    themeUrl: '',
+    language: 'en' as const
   };
   let accountCreationError = '';
   
@@ -64,6 +70,17 @@
   // UI state
   let notification = '';
   let connectionStatus = 'Initializing...';
+  
+  // Language state
+  let language: 'en' | 'de' = 'en';
+  
+  // Update language when account package changes
+  $: if (accountPackage?.language) {
+    language = accountPackage.language;
+  }
+  
+  // Get translations for current language
+  $: t = translations[language];
   
   // Initialize connection manager
   onMount(() => {
@@ -103,7 +120,7 @@
   function parseBackendUrl(): string {
     if (!browser) return '';
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('backend') || '';
+    return urlParams.get('backend') || ''; // Empty string means use relative URLs
   }
   
   // Parse account name from query parameters
@@ -115,9 +132,7 @@
   
   // Build scratchpad URL with optional object_name parameter
   function buildScratchpadUrl(): string {
-    if (!backendUrl) return '';
-    
-    const baseUrl = `${backendUrl}/ant-0/scratchpad-private`;
+    const baseUrl = backendUrl ? `${backendUrl}/ant-0/scratchpad-private` : '/ant-0/scratchpad-private';
     if (accountName) {
       return `${baseUrl}?object_name=${encodeURIComponent(accountName)}`;
     }
@@ -134,10 +149,9 @@
   
   // Build public scratchpad URL for peer communication
   function buildPublicScratchpadUrl(): string {
-    if (!backendUrl) return '';
-    
     const objectName = buildCommObjectName();
-    return `${backendUrl}/ant-0/scratchpad-public?object_name=${encodeURIComponent(objectName)}`;
+    const baseUrl = backendUrl ? `${backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
+    return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
   }
   
   // Convert JSON to byte array for scratchpad storage
@@ -158,14 +172,8 @@
   // Initialize backend integration
   async function initializeBackend() {
     console.log('🔧 Initializing backend integration...');
-    console.log('🔧 Backend URL:', backendUrl || 'None provided');
+    console.log('🔧 Backend URL:', backendUrl || 'Using relative URLs');
     console.log('🔧 Account name:', accountName || 'None provided');
-    
-    if (!backendUrl) {
-      console.log('✅ No backend URL provided, using demo mode');
-      initializeDemoMode();
-      return;
-    }
     
     isLoadingAccountPackage = true;
     
@@ -191,6 +199,11 @@
           loadTheme(fetchedPackage.themeUrl);
         }
         
+        // Load language if available
+        if (fetchedPackage.language) {
+          language = fetchedPackage.language;
+        }
+        
         showNotification(`Welcome back, ${fetchedPackage.username}!`);
       } else {
         // No account package found - offer to create one
@@ -204,9 +217,7 @@
     }
     
     // Initialize peer communication
-    if (backendUrl) {
-      await initializePeerCommunication();
-    }
+    await initializePeerCommunication();
     
     // Update debug info
     updateSessionStorageDebugInfo();
@@ -217,8 +228,6 @@
   
   // Fetch account package from backend
   async function fetchAccountPackage(): Promise<AccountPackage | null> {
-    if (!backendUrl) return null;
-    
     const url = buildScratchpadUrl();
     console.log('🌐 Fetching account package from:', url);
     
@@ -267,7 +276,7 @@
       
       // Check for HTTPS certificate error
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (backendUrl.startsWith('https://') && errorMessage.includes('Failed to fetch')) {
+      if (backendUrl && backendUrl.startsWith('https://') && errorMessage.includes('Failed to fetch')) {
         accountCreationError = `HTTPS certificate error detected. Please click here to accept the self-signed certificate: ${backendUrl}`;
         showAccountCreation = true;
       }
@@ -278,8 +287,6 @@
   
   // Create account package on backend
   async function createAccountPackage(accountData: AccountPackage): Promise<boolean> {
-    if (!backendUrl) return false;
-    
     console.log('💾 Creating account package:', accountData);
     
     try {
@@ -319,7 +326,7 @@
   
   // Update account package on backend
   async function updateAccountPackage(updatedData: Partial<AccountPackage>): Promise<boolean> {
-    if (!backendUrl || !accountPackage) return false;
+    if (!accountPackage) return false;
     
     console.log('🔄 Updating account package with:', updatedData);
     
@@ -366,8 +373,6 @@
   
   // Initialize public scratchpad for peer communication
   async function initializePeerCommunication(): Promise<void> {
-    if (!backendUrl) return;
-    
     const url = buildPublicScratchpadUrl();
     console.log('🌐 Initializing peer communication:', url);
     
@@ -411,8 +416,6 @@
   
   // Create new public scratchpad for peer communication
   async function createPublicScratchpad(): Promise<void> {
-    if (!backendUrl) return;
-    
     const url = buildPublicScratchpadUrl();
     console.log('💾 Creating public scratchpad at:', url);
     
@@ -473,6 +476,7 @@
       username: accountCreationForm.username.trim(),
       profileImage: accountCreationForm.profileImage.trim() || undefined,
       themeUrl: accountCreationForm.themeUrl.trim() || 'default',
+      language: accountCreationForm.language,
       friends: []
     };
     
@@ -493,7 +497,7 @@
   // Cancel account creation
   function cancelAccountCreation() {
     showAccountCreation = false;
-    accountCreationForm = { username: '', profileImage: '', themeUrl: 'default' };
+    accountCreationForm = { username: '', profileImage: '', themeUrl: '', language: 'en' as const };
     accountCreationError = '';
   }
   
@@ -505,6 +509,8 @@
     }
     
     if (url === 'default') {
+      // Remove any custom background
+      document.documentElement.style.removeProperty('--theme-background-url');
       return;
     }
     
@@ -512,48 +518,35 @@
     if (url.startsWith('http')) {
       themeFullUrl = url;
     } else {
-      themeFullUrl = `${backendUrl}/ant-0/data/${url}`;
+      // Use backendUrl for constructing theme URL, which defaults to relative if not set
+      themeFullUrl = backendUrl ? `${backendUrl}/ant-0/data/${url}` : `/ant-0/data/${url}`;
     }
     
     const themeLink = document.createElement('link');
     themeLink.id = 'dynamic-theme';
     themeLink.rel = 'stylesheet';
     themeLink.href = themeFullUrl;
-    document.head.appendChild(themeLink);
-  }
-  
-  // Initialize demo mode without backend
-  function initializeDemoMode() {
-    myPeerId = 'demo-' + Math.random().toString(36).substr(2, 9);
-    connectionStatus = 'Demo Mode (No Backend)';
     
-    // Create demo account package
-    accountPackage = {
-      username: 'Demo User',
-      themeUrl: 'default'
+    // When theme loads, check for background datamap
+    themeLink.onload = () => {
+      const styles = getComputedStyle(document.documentElement);
+      const backgroundDatamap = styles.getPropertyValue('--theme-background-datamap').trim();
+      
+      if (backgroundDatamap && backgroundDatamap !== '' && backgroundDatamap !== 'none') {
+        // Remove quotes if present
+        const cleanDatamap = backgroundDatamap.replace(/['"]/g, '');
+        const backgroundUrl = backendUrl ? 
+          `url("${backendUrl}/ant-0/data/${cleanDatamap}")` : 
+          `url("/ant-0/data/${cleanDatamap}")`;
+        document.documentElement.style.setProperty('--theme-background-url', backgroundUrl);
+        
+        // Apply background to body
+        document.body.style.background = `${backgroundUrl} no-repeat center center fixed`;
+        document.body.style.backgroundSize = 'cover';
+      }
     };
     
-    // Load friends from localStorage if available
-    const savedFriends = localStorage.getItem('friends');
-    if (savedFriends) {
-      try {
-        const parsed = JSON.parse(savedFriends);
-        friends = parsed.map((f: any) => ({
-          peerId: f.peerId,
-          displayName: f.displayName,
-          isConnected: false,
-          unreadCount: 0
-        }));
-      } catch (e) {
-        console.error('Failed to load friends:', e);
-      }
-    }
-    
-    // Update debug info
-    updateSessionStorageDebugInfo();
-    
-    // Start auto-reconnect for all friends
-    startAutoReconnect();
+    document.head.appendChild(themeLink);
   }
   
   // Handle incoming messages from peers
@@ -761,8 +754,8 @@
     
     localStorage.setItem('friends', JSON.stringify(friendsData));
     
-    // Also update account package if backend is available
-    if (backendUrl && accountPackage) {
+    // Also update account package if available
+    if (accountPackage) {
       updateAccountPackageFriends(friendsData);
     }
   }
@@ -1043,9 +1036,9 @@
     friends.forEach(friend => {
       // If friend is already connected, don't interfere
       if (friend.isConnected) {
-        return;
-      }
-      
+      return;
+    }
+    
       // Initialize countdown
       handshakeCountdowns[friend.peerId] = 60;
     });
@@ -1120,7 +1113,7 @@
         // Wait for offer from peer's handshake data
         pollForHandshake(peerId, 'offer');
       }
-    } catch (error) {
+        } catch (error) {
       console.error(`[${peerId}] Handshake failed:`, error);
       updateFriendConnectionStatus(peerId, false);
     }
@@ -1198,12 +1191,12 @@
       });
       
       return response.ok;
-    } catch (error) {
+      } catch (error) {
       console.error('Error putting handshake data:', error);
-      return false;
+        return false;
+      }
     }
-  }
-
+    
   // Poll for handshake data from server
   async function pollForHandshake(peerId: string, expectedType: 'offer' | 'answer') {
     const maxAttempts = 30; // 30 seconds timeout
@@ -1216,9 +1209,9 @@
         console.log(`[${peerId}] Handshake timeout waiting for ${expectedType}`);
         updateFriendConnectionStatus(peerId, false);
         return;
-      }
-      
-      try {
+    }
+    
+    try {
         // GET handshake data from FRIEND's scratchpad
         const data = await getHandshakeData(peerId);
         
@@ -1238,9 +1231,9 @@
           
           // Check if we've already processed this (avoid duplicates)
           if (data.timestamp === lastProcessedTimestamp) {
-            return;
-          }
-          
+      return;
+    }
+    
           clearInterval(pollInterval);
           lastProcessedTimestamp = data.timestamp;
           
@@ -1257,13 +1250,13 @@
             const answer = await connection.createAnswer(handshakeData);
             await postHandshake(peerId, 'answer', answer);
             console.log(`[${peerId}] Received offer, sent answer`);
-          } else {
+        } else {
             // We received an answer, set it as remote description
             await connection.setRemoteAnswer(handshakeData);
             console.log(`[${peerId}] Received and set answer`);
           }
-        }
-      } catch (error) {
+      }
+    } catch (error) {
         console.error(`[${peerId}] Poll error:`, error);
       }
     }, 1000);
@@ -1311,49 +1304,48 @@
               </div>
             </div>
           {:else}
-            <div class="input-group">
-              <label for="create-username">Username</label>
-              <input 
-                id="create-username"
+          <div class="input-group">
+            <label for="create-username">Username</label>
+            <input 
+              id="create-username"
                 type="text"
-                bind:value={accountCreationForm.username}
-                placeholder="Enter your username"
-                required
+              bind:value={accountCreationForm.username}
+              placeholder="Enter your username"
+              required
               />
-            </div>
-            
-            <div class="input-group">
+          </div>
+          
+          <div class="input-group">
               <label for="create-profile-image">Profile Image (optional)</label>
-              <input 
-                id="create-profile-image"
+            <input 
+              id="create-profile-image"
                 type="text"
-                bind:value={accountCreationForm.profileImage}
+              bind:value={accountCreationForm.profileImage}
                 placeholder="Datamap address or URL"
               />
-            </div>
-            
-            <div class="input-group">
+          </div>
+          
+          <div class="input-group">
               <label for="create-theme">Theme</label>
               <select id="create-theme" bind:value={accountCreationForm.themeUrl}>
                 <option value="default">Default</option>
-                <option value="dark">Dark</option>
               </select>
-            </div>
-            
+          </div>
+          
             {#if accountCreationError && !accountCreationError.includes('HTTPS')}
               <div class="error-message">
                 {accountCreationError}
               </div>
-            {/if}
-            
-            <div class="modal-buttons">
-              <button type="button" on:click={cancelAccountCreation} class="secondary-button">
-                Cancel
-              </button>
-              <button type="submit" class="primary-button" disabled={isLoadingAccountPackage}>
+          {/if}
+          
+          <div class="modal-buttons">
+            <button type="button" on:click={cancelAccountCreation} class="secondary-button">
+              Cancel
+            </button>
+            <button type="submit" class="primary-button" disabled={isLoadingAccountPackage}>
                 Create Account
-              </button>
-            </div>
+            </button>
+          </div>
           {/if}
         </form>
       </div>
@@ -1369,19 +1361,38 @@
   
   <div class="container">
     <div class="sidebar">
+      <AccountSettings
+        profileImage={accountPackage?.profileImage || ''}
+        themeUrl={accountPackage?.themeUrl || ''}
+        {language}
+        {backendUrl}
+        on:update={async ({detail}) => {
+          if (accountPackage) {
+            const success = await updateAccountPackage({
+              ...accountPackage,
+              [detail.field]: detail.value
+            });
+            if (success) {
+              showNotification(t.settingsUpdated);
+            }
+          }
+        }}
+      />
+      
       <FriendsList
         {friends}
         {selectedFriendId}
         {myPeerId}
         myUsername={accountPackage?.username || 'User'}
         {handshakeCountdowns}
+        {language}
         on:selectFriend={handleSelectFriend}
         on:addFriend={handleAddFriend}
         on:removeFriend={handleRemoveFriend}
         on:notification={(e) => showNotification(e.detail)}
       />
-    </div>
-    
+        </div>
+        
     <div class="main-content">
       <Chat
         messages={currentChatMessages}
@@ -1389,18 +1400,19 @@
         isConnected={selectedFriend?.isConnected || false}
         friendName={selectedFriend?.displayName || ''}
         friendPeerId={selectedFriend?.peerId || ''}
+        {language}
         on:sendMessage={handleSendMessage}
         on:notification={(e) => showNotification(e.detail)}
       />
-    </div>
-  </div>
+              </div>
+                </div>
   
   {#if notification}
     <div class="notification">
       {notification}
-    </div>
-  {/if}
-</div>
+                </div>
+                  {/if}
+                </div>
 
 <style>
   .app {
@@ -1573,5 +1585,12 @@
       transform: translateX(0);
       opacity: 1;
     }
+  }
+  
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+    border-right: 1px solid var(--line-color);
   }
 </style> 

@@ -7,12 +7,13 @@ export type AttachmentType = 'image' | 'video' | 'file';
 export interface FileAttachment {
   id: string;         // Unique identifier for the attachment
   name: string;       // Original filename
-  type: AttachmentType; // Type of attachment (image, video, file)
-  mimeType: string;   // MIME type of the file
+  type: string;       // Type of attachment (image, video, file)
   size: number;       // Size in bytes
-  data?: string;      // Base64 encoded data (might be undefined for chunked files until complete)
-  chunks?: number;    // Number of chunks (for chunked files)
-  complete?: boolean; // Whether all chunks have been received
+  data: string;       // Base64 encoded data (might be undefined for chunked files until complete)
+  complete: boolean;  // Whether all chunks have been received
+  mimeType?: string;  // MIME type of the file (optional)
+  totalChunks?: number; // Number of chunks (for chunked files)
+  chunkIndex?: number; // Index of this chunk
 }
 
 export interface AttachmentChunk {

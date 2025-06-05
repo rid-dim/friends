@@ -1,561 +1,149 @@
 /* Galaxy Theme for Friends P2P Chat */
-/* Cosmic galaxy theme with nebula background when .friends class is applied */
 
-/* CSS Custom Properties for dynamic background URL */
 :root {
+  /* Base colors */
+  --background-color: rgba(0, 0, 0, 0.85);
+  --text-color: #e6e6fa;
+  --text-color-secondary: #b8b8e6;
+  
+  /* UI elements */
+  --line-color: rgba(255, 255, 255, 0.2);
+  --foreground-color1: rgba(255, 255, 255, 0.1);
+  --foreground-color2: rgba(0, 0, 0, 0.4);
+  
+  /* Accent colors */
+  --notification-color: #7b68ee;
+  --success-color: #50c878;
+  --error-color: #ff6b6b;
+  
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
+  
+  /* Typography */
+  --font-family: 'Courier New', monospace;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  
+  /* Spacing */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  
+  /* Border radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-full: 9999px;
+  
+  /* Transitions */
+  --transition-fast: 200ms;
+  --transition-normal: 300ms;
+  --transition-slow: 400ms;
+  
+  /* Theme specific */
   --theme-background-datamap: '13957eee2e36b8f7af7eab69f7bdc6eacf0b3ce3735c3d64873a4be8bc36b84c';
-  --theme-background-url: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMwMDAwMDAiLz48L3N2Zz4=');
+  --theme-background-url: none;
 }
 
-/* Force Galaxy background for everything */
-.friends html, .friends body {
-  background: var(--theme-background-url) no-repeat center center fixed !important;
-  background-size: cover !important;
-  color: #e6e6fa !important;
-  position: relative;
-}
-
-/* Main container and body with cosmic overlay */
-.friends main {
-  background: var(--theme-background-url) no-repeat center center fixed !important;
-  background-size: cover !important;
-  color: #e6e6fa !important;
-  position: relative;
+/* Galaxy theme specific styles */
+.friends {
+  /* Background will be set dynamically via JavaScript */
   min-height: 100vh;
+  position: relative;
 }
 
-/* Very light cosmic overlay for better readability */
-.friends main::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.1);
-  z-index: -1;
-  pointer-events: none;
-}
-
-.friends .container {
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.friends .config {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  color: #e6e6fa;
-}
-
-.friends .burger-menu {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #e6e6fa;
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  transition: all 0.3s ease;
-}
-
-.friends .burger-menu:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5);
-  background: rgba(0, 0, 0, 0.6);
-}
-
-.friends .chat {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  color: #e6e6fa;
-}
-
-.friends .chat-header {
-  background: rgba(0, 0, 0, 0.4);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 20px 20px 0 0;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-}
-
-.friends .chat-header h1 {
-  color: #e6e6fa;
-  text-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.8),
-    0 0 15px rgba(255, 255, 255, 0.3);
-  font-weight: bold;
-  letter-spacing: 1.5px;
-  font-family: 'Courier New', monospace;
-}
-
-.friends .connection-indicator {
-  color: #000 !important;
-  background: rgba(255, 255, 255, 0.9) !important;
-  padding: 0.5rem 1rem !important;
-  border-radius: 25px !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
-  text-shadow: none !important;
-  font-weight: 700 !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
-  font-family: 'Courier New', monospace !important;
-}
-
-.friends .message {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 18px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  color: #e6e6fa;
-}
-
-.friends .message.self {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #e6e6fa;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-}
-
+/* Glassmorphism effects */
+.friends .container,
+.friends .sidebar,
+.friends .main-content,
+.friends .message,
 .friends .input-area {
-  background: rgba(0, 0, 0, 0.3);
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0 0 20px 20px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-.friends .input-group input,
-.friends .input-group select,
-.friends .input-group textarea,
-.friends .input-row textarea {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #e6e6fa;
-  border-radius: 15px;
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  font-family: 'Courier New', monospace;
+/* Ensure text is always visible */
+input, select, textarea, button {
+  color: var(--text-color) !important;
+  background-color: rgba(0, 0, 0, 0.6) !important;
 }
 
-.friends .input-group input:focus,
-.friends .input-group select:focus,
-.friends .input-group textarea:focus,
-.friends .input-row textarea:focus {
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 
-    0 0 15px rgba(255, 255, 255, 0.3),
-    inset 0 2px 5px rgba(0, 0, 0, 0.2);
-  transform: scale(1.02);
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.friends .connection-status {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
-  border-radius: 15px !important;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
-}
-
-.friends .connection-status .status-text {
-  color: #000 !important;
-  font-weight: 700 !important;
-  text-shadow: none !important;
-  font-size: 1rem !important;
-  font-family: 'Courier New', monospace !important;
-}
-
-.friends .code-block textarea {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #e6e6fa;
-  border-radius: 15px;
-  font-family: 'Courier New', monospace;
-}
-
-.friends .pending-attachment {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #e6e6fa;
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-
-.friends .empty-chat {
-  color: #e6e6fa;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  font-weight: 600;
-  font-family: 'Courier New', monospace;
-}
-
-.friends h2,
-.friends .connection-section h3,
-.friends .offer-answer-section h3 {
-  color: #e6e6fa;
-  text-shadow: 
-    0 1px 3px rgba(0, 0, 0, 0.8),
-    0 0 15px rgba(255, 255, 255, 0.2);
-  font-weight: bold;
-  letter-spacing: 0.8px;
-  font-family: 'Courier New', monospace;
-}
-
-.friends .input-group label,
-.friends .step-section h4 {
-  color: #ccc;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-  font-weight: 600;
-  font-family: 'Courier New', monospace;
-}
-
-.friends .nick {
-  color: #fff;
-  font-weight: bold;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  font-family: 'Courier New', monospace;
-}
-
-.friends .time {
-  color: #aaa;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.friends .attachment-container {
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.friends .resizer {
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-}
-
-.friends .resizer:hover {
-  background: rgba(0, 0, 0, 0.7);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  transform: scaleY(1.5);
-}
-
-.friends .offer-refresh-info {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-.friends .offer-refresh-info small {
-  color: #e6e6fa;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  font-weight: 600;
-  font-family: 'Courier New', monospace;
-}
-
-.friends .notification-section h3 {
-  color: #e6e6fa;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  font-family: 'Courier New', monospace;
-}
-
-.friends .notification-status {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-.friends .notification-status .help-text {
-  color: #e6e6fa;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-
-.friends .loading-content {
-  background: rgba(0, 0, 0, 0.3);
-  color: #e6e6fa;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
-
-.friends .modal-content {
-  background: rgba(0, 0, 0, 0.4);
-  color: #e6e6fa;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
-}
-
-.friends .modal-content h2 {
-  color: #e6e6fa;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  font-family: 'Courier New', monospace;
-}
-
-.friends .error-message {
-  background: rgba(139, 0, 0, 0.4);
-  border: 1px solid rgba(255, 0, 0, 0.5);
-  color: #e6e6fa;
-  border-radius: 15px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-  box-shadow: 0 4px 15px rgba(139, 0, 0, 0.3);
-}
-
-.friends .account-package-info {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-.friends .account-package-info h3 {
-  color: #e6e6fa;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  font-family: 'Courier New', monospace;
-}
-
-.friends .account-field strong {
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-  font-family: 'Courier New', monospace;
-}
-
-.friends .datamap-address {
-  color: #ccc;
-  font-family: 'Courier New', monospace;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-
-.friends .no-account {
-  color: #e6e6fa;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  font-family: 'Courier New', monospace;
-}
-
-.friends .profile-image-preview img,
-.friends .profile-image-display img {
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-}
-
-.friends .user-profile {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-.friends .profile-avatar {
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-}
-
-.friends .profile-avatar-placeholder {
-  background: rgba(0, 0, 0, 0.5);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  color: #e6e6fa;
-  font-weight: bold;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  font-family: 'Courier New', monospace;
-}
-
-.friends .profile-name {
-  color: #e6e6fa;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  font-family: 'Courier New', monospace;
-}
-
-.friends .profile-status {
-  color: #ccc;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  font-family: 'Courier New', monospace;
-}
-
-/* Cosmic-style buttons */
-.friends .primary-button {
-  background: rgba(0, 0, 0, 0.5) !important;
-  border: 1px solid rgba(255, 255, 255, 0.4) !important;
-  color: #e6e6fa !important;
+/* Add Friend button styling */
+.add-friend-button {
+  background: linear-gradient(135deg, var(--notification-color), #9b59b6) !important;
+  color: white !important;
+  border: none !important;
+  padding: 0.75rem 1.5rem !important;
+  border-radius: var(--radius-full) !important;
   font-weight: bold !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7) !important;
-  border-radius: 15px !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
-  transition: all 0.3s ease !important;
-  font-family: 'Courier New', monospace !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  box-shadow: 0 0 20px rgba(123, 104, 238, 0.4) !important;
+  transition: all var(--transition-normal) !important;
 }
 
-.friends .primary-button:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.7) !important;
-  transform: translateY(-2px) scale(1.05) !important;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5) !important;
+.add-friend-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 0 30px rgba(123, 104, 238, 0.6) !important;
 }
 
-.friends .secondary-button {
-  background: rgba(255, 255, 255, 0.1) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-  color: #e6e6fa !important;
-  font-weight: 600 !important;
-  border-radius: 15px !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
-  font-family: 'Courier New', monospace !important;
+/* Cosmic glow effects */
+.friends .primary-button {
+  box-shadow: 0 0 20px rgba(123, 104, 238, 0.4);
+  transition: all var(--transition-normal);
+  background: linear-gradient(135deg, var(--notification-color), #9b59b6) !important;
+  color: white !important;
 }
 
-.friends .secondary-button:hover {
-  background: rgba(0, 0, 0, 0.4) !important;
-  color: #e6e6fa !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6) !important;
-  transform: translateY(-1px) !important;
+.friends .primary-button:hover {
+  box-shadow: 0 0 30px rgba(123, 104, 238, 0.6);
+  transform: translateY(-2px);
 }
 
-.friends .danger-button {
-  background: rgba(139, 0, 0, 0.4) !important;
-  border: 1px solid rgba(255, 0, 0, 0.5) !important;
-  color: #e6e6fa !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8) !important;
-  border-radius: 15px !important;
-  font-family: 'Courier New', monospace !important;
+/* Ensure all text inputs and form elements are visible */
+.friends input::placeholder {
+  color: rgba(230, 230, 250, 0.6) !important;
 }
 
-/* AttachmentView component styles */
-.friends .attachment-info {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e6e6fa;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+.friends select option {
+  background-color: rgba(0, 0, 0, 0.9) !important;
+  color: var(--text-color) !important;
 }
 
-.friends .attachment-placeholder {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-}
-
-.friends .loading {
-  color: #e6e6fa;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-
-.friends .attachment-size {
-  color: #ccc;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-
-.friends .file-attachment {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #e6e6fa;
-  border-radius: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-.friends .file-size {
-  color: #ccc;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-
-.friends .spinner {
-  border-color: rgba(255, 255, 255, 0.2);
-  border-top-color: #fff;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
-}
-
-/* Cosmic-style status indicators */
-.friends .status-indicator.status-connected, 
-.friends .status-dot.status-connected { 
-  background: linear-gradient(135deg, #32cd32 0%, #7cfc00 100%) !important;
-  box-shadow: 0 0 20px rgba(50, 205, 50, 0.8) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-}
-
-.friends .status-indicator.status-connecting, 
-.friends .status-dot.status-connecting { 
-  background: linear-gradient(135deg, #ffa500 0%, #ffd700 100%) !important;
-  box-shadow: 0 0 20px rgba(255, 165, 0, 0.8) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-}
-
-.friends .status-indicator.status-failed, 
-.friends .status-dot.status-failed { 
-  background: linear-gradient(135deg, #ff0000 0%, #dc143c 100%) !important;
-  box-shadow: 0 0 20px rgba(255, 0, 0, 0.8) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-}
-
-.friends .status-indicator.status-disconnected, 
-.friends .status-dot.status-disconnected { 
-  background: linear-gradient(135deg, #696969 0%, #808080 100%) !important;
-  box-shadow: 0 0 15px rgba(105, 105, 105, 0.6) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-}
-
-.friends .status-indicator.status-waiting-for-answer,
-.friends .status-dot.status-waiting-for-answer,
-.friends .status-indicator.status-waiting-for-offer,
-.friends .status-dot.status-waiting-for-offer,
-.friends .status-indicator.status-creating-offer,
-.friends .status-dot.status-creating-offer,
-.friends .status-indicator.status-processing-answer,
-.friends .status-dot.status-processing-answer {
-  background: linear-gradient(135deg, #ffa500 0%, #ffd700 100%) !important;
-  box-shadow: 0 0 20px rgba(255, 165, 0, 0.8) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-}
-
-/* Send button cosmic styling */
-.friends .send-button.active {
-  background: rgba(0, 0, 0, 0.5) !important;
-  color: #e6e6fa !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7) !important;
-  border-radius: 15px !important;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
-  animation: cosmic-pulse 2s ease-in-out infinite !important;
-  font-family: 'Courier New', monospace !important;
-}
-
+/* Cosmic pulse animation */
 @keyframes cosmic-pulse {
-  0%, 100% { 
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  0% {
+    box-shadow: 0 0 0 0 rgba(123, 104, 238, 0.4);
   }
-  50% { 
-    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5);
-    transform: scale(1.05);
+  70% {
+    box-shadow: 0 0 0 15px rgba(123, 104, 238, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(123, 104, 238, 0);
   }
 }
 
-/* Help text styling */
-.friends .help-text {
-  color: #ccc !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6) !important;
-  font-weight: 500 !important;
-  font-family: 'Courier New', monospace !important;
-}
-
-/* Cosmic notification styling */
 .friends .notification {
-  background: rgba(0, 0, 0, 0.6) !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-  color: #e6e6fa !important;
-  border-radius: 15px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7) !important;
-  animation: notification-cosmic 0.5s ease-out !important;
-  font-family: 'Courier New', monospace !important;
+  animation: cosmic-pulse 2s infinite;
 }
 
-@keyframes notification-cosmic {
-  0% { 
-    transform: translateY(-20px) scale(0.8); 
-    opacity: 0; 
-  }
-  50% { 
-    transform: translateY(-5px) scale(1.05); 
-  }
-  100% { 
-    transform: translateY(0) scale(1); 
-    opacity: 1; 
-  }
+/* Additional text visibility improvements */
+.friends label,
+.friends p,
+.friends h1,
+.friends h2,
+.friends h3,
+.friends h4,
+.friends h5,
+.friends h6 {
+  color: var(--text-color) !important;
+  text-shadow: 0 0 10px rgba(123, 104, 238, 0.3);
 } 

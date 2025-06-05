@@ -9,12 +9,14 @@
 
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { translations } from '../i18n/translations';
   
   export let friends: Friend[] = [];
   export let selectedFriendId: string | null = null;
   export let myPeerId: string = '';
-  export let myUsername: string = 'User';
+  export let myUsername: string = '';
   export let handshakeCountdowns: Record<string, number> = {};
+  export let language: 'en' | 'de' = 'en';
   
   const dispatch = createEventDispatcher();
   
@@ -22,19 +24,9 @@
   let newFriendPeerId = '';
   let newFriendName = '';
   
-  function selectFriend(peerId: string) {
-    dispatch('selectFriend', peerId);
-  }
-  
-  function addFriend() {
+  function handleAddFriend() {
     if (!newFriendPeerId.trim() || !newFriendName.trim()) {
-      return;
-    }
-    
-    // Validate peer ID format (should be a long hex string)
-    const peerIdRegex = /^[a-fA-F0-9]{64,}$/;
-    if (!peerIdRegex.test(newFriendPeerId.trim())) {
-      dispatch('notification', 'Invalid Peer ID format. Please enter a long hexadecimal string (64+ characters)');
+      dispatch('notification', translations[language].invalidPeerId);
       return;
     }
     
@@ -49,103 +41,106 @@
     showAddFriend = false;
   }
   
-  function removeFriend(peerId: string) {
-    if (confirm('Remove this friend?')) {
+  function handleRemoveFriend(peerId: string) {
+    if (confirm(translations[language].removeFriend + '?')) {
       dispatch('removeFriend', peerId);
     }
   }
   
+  function handleSelectFriend(peerId: string) {
+    dispatch('selectFriend', peerId);
+  }
+  
   function copyMyPeerId() {
     navigator.clipboard.writeText(myPeerId);
-    dispatch('notification', 'Peer ID copied!');
+    dispatch('notification', translations[language].peerIdCopied);
   }
+  
+  $: t = translations[language];
 </script>
 
 <div class="friends-list">
-  <div class="header">
-    <h2>Friends</h2>
-    <button class="add-button" on:click={() => showAddFriend = !showAddFriend}>
-      {showAddFriend ? '✕' : '+'}
+  <div class="my-info">
+    <div class="my-name">{myUsername}</div>
+    <button class="peer-id" on:click={copyMyPeerId} title="Click to copy">
+      {myPeerId.slice(0, 8)}...
     </button>
   </div>
   
-  {#if myPeerId || myUsername}
-    <div class="my-info">
-      <div class="my-username">
-        <span class="label">Me:</span>
-        <span class="username">{myUsername}</span>
-      </div>
-      {#if myPeerId}
-        <div class="my-peer-id">
-          <span class="label">ID:</span>
-          <button class="peer-id" on:click={copyMyPeerId} title="Click to copy">
-            {myPeerId.slice(0, 8)}...
-          </button>
-        </div>
-      {/if}
-    </div>
-  {/if}
-  
-  {#if showAddFriend}
-    <div class="add-friend-form">
-      <div class="input-group">
-        <label for="friend-peer-id">Friend's Peer ID (long hex string)</label>
-        <input
-          id="friend-peer-id"
-          bind:value={newFriendPeerId}
-          placeholder="e.g. b2bd8aa0d9be1abf2ced18973935e12a1a4a0c97..."
-          on:keydown={(e) => e.key === 'Enter' && addFriend()}
-          class="peer-id-input"
-        />
-        <small class="hint">Ask your friend to copy their Peer ID from the "ID:" section above</small>
-      </div>
-      
-      <div class="input-group">
-        <label for="friend-name">Display Name</label>
-        <input
-          id="friend-name"
-          bind:value={newFriendName}
-          placeholder="e.g. Alice, Bob, etc."
-          on:keydown={(e) => e.key === 'Enter' && addFriend()}
-        />
-      </div>
-      
-      <button on:click={addFriend} disabled={!newFriendPeerId.trim() || !newFriendName.trim()}>
-        Add Friend
-      </button>
-    </div>
-  {/if}
-  
   <div class="friends">
-    {#if friends.length === 0}
-      <div class="empty-state">
-        <p>No friends yet</p>
-        <p class="hint">Click + to add a friend</p>
-      </div>
-    {:else}
-      {#each friends as friend}
-        <div 
-          class="friend-item"
-          class:selected={selectedFriendId === friend.peerId}
-          on:click={() => selectFriend(friend.peerId)}
-        >
-          <span class="status-dot" class:connected={friend.isConnected}></span>
-          <span class="name">{friend.displayName}</span>
-          {#if friend.unreadCount > 0}
-            <span class="unread-badge">{friend.unreadCount}</span>
-          {/if}
+    {#each friends as friend (friend.peerId)}
+      <div
+        class="friend"
+        class:selected={selectedFriendId === friend.peerId}
+        class:disconnected={!friend.isConnected}
+        on:click={() => handleSelectFriend(friend.peerId)}
+        role="button"
+        tabindex="0"
+        on:keydown={(e) => e.key === 'Enter' && handleSelectFriend(friend.peerId)}
+      >
+        <div class="friend-info">
+          <div class="friend-name">{friend.displayName}</div>
           {#if handshakeCountdowns[friend.peerId] !== undefined}
-            <span class="countdown">{handshakeCountdowns[friend.peerId]}</span>
+            <div class="countdown">{handshakeCountdowns[friend.peerId]}s</div>
           {/if}
-          <button 
-            class="remove-button"
-            on:click|stopPropagation={() => removeFriend(friend.peerId)}
-            title="Remove friend"
+        </div>
+        
+        <div class="friend-status">
+          <span class="status-dot" class:connected={friend.isConnected}></span>
+          {#if friend.unreadCount > 0}
+            <span class="unread-count">{friend.unreadCount}</span>
+          {/if}
+          <button
+            class="remove-friend"
+            on:click={(e) => {
+              e.stopPropagation();
+              handleRemoveFriend(friend.peerId);
+            }}
+            title={t.removeFriend}
           >
             ✕
           </button>
         </div>
-      {/each}
+      </div>
+    {/each}
+  </div>
+  
+  <div class="add-friend-section">
+    {#if showAddFriend}
+      <div class="add-friend-form">
+        <input
+          type="text"
+          bind:value={newFriendPeerId}
+          placeholder={t.enterPeerId}
+        />
+        <input
+          type="text"
+          bind:value={newFriendName}
+          placeholder={t.enterFriendName}
+        />
+        <div class="form-buttons">
+          <button
+            class="cancel"
+            on:click={() => showAddFriend = false}
+          >
+            ✕
+          </button>
+          <button
+            class="confirm"
+            on:click={handleAddFriend}
+            disabled={!newFriendPeerId.trim() || !newFriendName.trim()}
+          >
+            ✓
+          </button>
+        </div>
+      </div>
+    {:else}
+      <button
+        class="add-friend-button"
+        on:click={() => showAddFriend = true}
+      >
+        + {t.addFriend}
+      </button>
     {/if}
   </div>
 </div>
@@ -155,69 +150,21 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: var(--foreground-color1);
+    background: var(--background-color);
     border-right: 1px solid var(--line-color);
   }
   
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  .my-info {
     padding: 1rem;
     border-bottom: 1px solid var(--line-color);
-  }
-  
-  .header h2 {
-    margin: 0;
-    font-size: 1.2rem;
-  }
-  
-  .add-button {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    border: none;
-    background: var(--notification-color);
-    color: white;
-    font-size: 1.2rem;
-    cursor: pointer;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.2s;
-  }
-  
-  .add-button:hover {
-    transform: scale(1.1);
-  }
-  
-  .my-info {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--line-color);
-    background: var(--background-color);
-  }
-  
-  .my-username {
-    display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 0.5rem;
-    font-size: 0.95rem;
-    margin-bottom: 0.25rem;
   }
   
-  .my-username .username {
+  .my-name {
     font-weight: 600;
-  }
-  
-  .my-peer-id {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-  }
-  
-  .my-info .label {
-    opacity: 0.7;
+    font-size: 1.1rem;
   }
   
   .peer-id {
@@ -226,163 +173,175 @@
     border: 1px solid var(--line-color);
     border-radius: 4px;
     padding: 0.25rem 0.5rem;
-    cursor: pointer;
     font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    width: fit-content;
   }
   
   .peer-id:hover {
-    background: var(--foreground-color2);
-  }
-  
-  .add-friend-form {
-    padding: 1rem;
-    border-bottom: 1px solid var(--line-color);
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  
-  .add-friend-form .input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  .add-friend-form label {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-color);
-  }
-  
-  .add-friend-form input {
-    padding: 0.5rem;
-    border: 1px solid var(--line-color);
-    border-radius: 4px;
-    background: var(--background-color);
-    color: inherit;
-    font-size: 0.9rem;
-  }
-  
-  .peer-id-input {
-    font-family: monospace;
-    font-size: 0.8rem !important;
-  }
-  
-  .add-friend-form .hint {
-    font-size: 0.75rem;
-    color: var(--text-color-secondary);
-    margin-top: 0.25rem;
-  }
-  
-  .add-friend-form button {
-    padding: 0.5rem;
-    background: var(--notification-color);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-  }
-  
-  .add-friend-form button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    background: var(--foreground-color1);
   }
   
   .friends {
     flex: 1;
     overflow-y: auto;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
   
-  .empty-state {
-    text-align: center;
-    padding: 2rem;
-    opacity: 0.5;
-  }
-  
-  .empty-state .hint {
-    font-size: 0.85rem;
-    margin-top: 0.5rem;
-  }
-  
-  .friend-item {
-    padding: 0.75rem 1rem;
+  .friend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    border-radius: 8px;
+    background: var(--background-color);
+    border: 1px solid var(--line-color);
     cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    width: 100%;
+  }
+  
+  .friend.selected {
+    background: var(--foreground-color1);
+    border-color: var(--notification-color);
+  }
+  
+  .friend.disconnected {
+    opacity: 0.7;
+  }
+  
+  .friend.disconnected .friend-name {
+    color: var(--foreground-color2);
+  }
+  
+  .friend-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .friend-name {
+    font-weight: 500;
+  }
+  
+  .countdown {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    font-family: monospace;
+  }
+  
+  .friend-status {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    position: relative;
-    transition: background 0.2s;
-  }
-  
-  .friend-item:hover {
-    background: var(--foreground-color2);
-  }
-  
-  .friend-item.selected {
-    background: var(--foreground-color2);
-    border-left: 3px solid var(--notification-color);
   }
   
   .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--notification-color);
-    flex-shrink: 0;
+    border: 2px solid var(--notification-color);
+    background: transparent;
   }
   
   .status-dot.connected {
-    background: #198754;
+    background: var(--notification-color);
+    border: none;
   }
   
-  .name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 500;
-  }
-  
-  .unread-badge {
+  .unread-count {
     background: var(--notification-color);
     color: white;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     padding: 0.125rem 0.375rem;
     border-radius: 12px;
-    min-width: 1.25rem;
+    min-width: 1.5rem;
     text-align: center;
-    flex-shrink: 0;
   }
   
-  .countdown {
-    font-size: 0.7rem;
-    color: var(--text-color);
-    background: var(--foreground-color1);
-    padding: 0.125rem 0.375rem;
-    border-radius: 12px;
-    min-width: 1.25rem;
-    text-align: center;
-    flex-shrink: 0;
-    opacity: 0.7;
-    font-family: monospace;
-  }
-  
-  .remove-button {
+  .remove-friend {
     background: none;
     border: none;
     color: var(--notification-color);
     cursor: pointer;
-    font-size: 0.9rem;
+    padding: 0.25rem;
     opacity: 0;
     transition: opacity 0.2s;
-    padding: 0;
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
   }
   
-  .friend-item:hover .remove-button {
+  .friend:hover .remove-friend {
     opacity: 1;
+  }
+  
+  .add-friend-section {
+    padding: 1rem;
+    border-top: 1px solid var(--line-color);
+  }
+  
+  .add-friend-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .add-friend-form input {
+    padding: 0.5rem;
+    border: 1px solid var(--line-color);
+    border-radius: 4px;
+    font-size: 0.9rem;
+  }
+  
+  .form-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .form-buttons button {
+    flex: 1;
+    padding: 0.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  
+  .form-buttons .cancel {
+    background: var(--foreground-color2);
+    color: var(--text-color);
+  }
+  
+  .form-buttons .confirm {
+    background: var(--notification-color);
+    color: white;
+  }
+  
+  .form-buttons button:hover:not(:disabled) {
+    opacity: 0.8;
+  }
+  
+  .form-buttons button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .add-friend-button {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--notification-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  
+  .add-friend-button:hover {
+    opacity: 0.8;
   }
 </style> 
