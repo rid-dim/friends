@@ -141,19 +141,17 @@
     {/if}
   </div>
   
-  <div class="input-area" class:disabled={!isConnected}>
+  <div class="input-area">
     <div class="input-row">
       <textarea
         bind:value={messageInput}
         on:keydown={handleKeydown}
         placeholder={isConnected ? t.typeMessage : t.connectFirst}
-        disabled={!isConnected}
         rows="2"
       ></textarea>
       
       <div class="input-controls">
         <FileUploader 
-          disabled={!isConnected}
           on:fileSelected={({detail}) => {
             pendingAttachment = detail.attachment;
           }}
@@ -174,6 +172,7 @@
           disabled={!isConnected || (!messageInput.trim() && !pendingAttachment)}
           class="send-button"
           class:active={isConnected && (messageInput.trim() || pendingAttachment)}
+          title={!isConnected ? t.waitForFriendOnline : ''}
         >
           {t.send}
         </button>
@@ -317,10 +316,6 @@
   .input-area {
     padding: 1rem;
     border-top: 1px solid var(--line-color);
-  }
-  
-  .input-area.disabled {
-    opacity: 0.6;
   }
   
   .input-row {

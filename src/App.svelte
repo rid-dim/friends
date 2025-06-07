@@ -70,6 +70,7 @@
   // UI state
   let notification = '';
   let connectionStatus = 'Initializing...';
+  let notificationStatus = '';
   
   // Language state
   let language: 'en' | 'de' = 'en';
@@ -93,6 +94,9 @@
     // Parse URL parameters
     backendUrl = parseBackendUrl();
     accountName = parseAccountName();
+    
+    // Request notification permission for push notifications
+    requestNotificationPermission();
     
     // Initialize backend integration
     initializeBackend();
@@ -569,7 +573,7 @@
         
         chatMessages[peerId] = [...chatMessages[peerId], message];
         
-        // Update unread count if not selected
+                // Update unread count if not selected
         if (selectedFriendId !== peerId) {
           const friend = friends.find(f => f.peerId === peerId);
           if (friend) {
@@ -577,10 +581,18 @@
             friends = friends;
           }
         }
-        
-        // Show notification if in background
-        if (document.hidden && data.nick && data.message) {
-          showBrowserNotification(data.nick, data.message);
+
+        // Show push notification if:
+        // 1. App is in background (tab not visible), OR
+        // 2. App is in foreground but the sender's chat is not currently selected
+        const shouldShowNotification = (
+          document.hidden || // App in background
+          selectedFriendId !== peerId // Different chat is selected
+        );
+
+        if (shouldShowNotification && data.nick && data.message) {
+          const friendName = getFriendName(peerId);
+          showBrowserNotification(friendName, data.message, peerId);
         }
         break;
         
@@ -908,20 +920,88 @@
   }
   
   // Show browser notification
-  function showBrowserNotification(title: string, body: string) {
+  function showBrowserNotification(title: string, body: string, peerId?: string) {
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/favicon.png' });
+      const notification = new Notification(title, { 
+        body, 
+        icon: '/favicon.png',
+        tag: peerId || 'general', // Prevent duplicate notifications from same sender
+        requireInteraction: false // Auto-close after a few seconds
+      });
+      
+      // Make notification clickable to focus the app and select the chat
+      notification.onclick = () => {
+        window.focus(); // Focus the browser window/tab
+        
+        if (peerId) {
+          // Select the friend's chat
+          selectedFriendId = peerId;
+          
+          // Clear unread count
+          const friend = friends.find(f => f.peerId === peerId);
+          if (friend) {
+            friend.unreadCount = 0;
+            friends = friends;
+          }
+        }
+        
+        notification.close();
+      };
     }
   }
   
   // Request notification permission
   async function requestNotificationPermission() {
-    if ('Notification' in window && Notification.permission === 'default') {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        showNotification('Notifications enabled');
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        updateNotificationStatus();
+        if (permission === 'granted') {
+          showNotification(t.notificationsEnabled);
+        } else if (permission === 'denied') {
+          showNotification(t.notificationsDenied);
+        }
+      } else {
+        updateNotificationStatus();
       }
+    } else {
+      notificationStatus = t.notificationsNotSupported;
     }
+  }
+  
+  // Update notification status display
+  function updateNotificationStatus() {
+    if ('Notification' in window) {
+      switch (Notification.permission) {
+        case 'granted':
+          notificationStatus = t.notificationsActivated;
+          break;
+        case 'denied':
+          notificationStatus = t.notificationsBlocked;
+          break;
+        case 'default':
+          notificationStatus = t.notificationsNotRequested;
+          break;
+      }
+    } else {
+      notificationStatus = t.notificationsNotSupported;
+    }
+  }
+  
+  // Test function for push notifications (for development/debugging)
+  function testPushNotification() {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      showBrowserNotification('Test Nachricht', 'Dies ist eine Test-Push-Notification!');
+      console.log('Test-Push-Notification gesendet');
+    } else {
+      console.log('Push-Notifications nicht verfügbar oder nicht erlaubt');
+      showNotification(t.notificationsNotAvailable);
+    }
+  }
+  
+  // Make test function available globally for debugging
+  if (browser && typeof window !== 'undefined') {
+    (window as any).testPushNotification = testPushNotification;
   }
   
   // Get current chat messages
@@ -1357,6 +1437,7 @@
     {connectionStatus}
     {handshakeStatus}
     {handshakeCountdown}
+    {notificationStatus}
   />
   
   <div class="container">
@@ -1592,5 +1673,8 @@
     flex-direction: column;
     width: 300px;
     border-right: 1px solid var(--line-color);
+    overflow-y: auto; /* Enable vertical scrolling */
+    max-height: 100%; /* Ensure it doesn't exceed container height */
+    padding-bottom: 10px; /* Add some bottom padding for better scrolling experience */
   }
 </style> 

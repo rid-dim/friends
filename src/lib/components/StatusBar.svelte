@@ -3,6 +3,7 @@
   export let connectionStatus: string = 'Disconnected';
   export let handshakeStatus: string = '';
   export let handshakeCountdown: string = '';
+  export let notificationStatus: string = '';
 </script>
 
 <div class="status-bar">
@@ -21,6 +22,13 @@
         {#if handshakeCountdown}
           <span class="countdown">{handshakeCountdown}</span>
         {/if}
+      </div>
+    {/if}
+    
+    {#if notificationStatus}
+      <div class="notification-status">
+        <span class="label">🔔</span>
+        <span class="value">{notificationStatus}</span>
       </div>
     {/if}
   </div>
@@ -49,7 +57,8 @@
   }
   
   .connection-status,
-  .handshake-status {
+  .handshake-status,
+  .notification-status {
     display: flex;
     align-items: center;
     gap: 0.5rem;
