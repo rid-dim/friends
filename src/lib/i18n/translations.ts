@@ -45,7 +45,12 @@ export const translations = {
     // Errors
     connectionError: 'Connection error',
     invalidPeerId: 'Invalid Peer ID',
-    friendExists: 'Friend already exists'
+    friendExists: 'Friend already exists',
+    
+    // Session management
+    sessionTransferred: 'Session transferred to new app instance',
+    sessionDeactivatedMessage: 'This app instance has been deactivated because another instance was opened.',
+    reload: 'Reload'
   },
   de: {
     // Account settings
@@ -93,7 +98,12 @@ export const translations = {
     // Errors
     connectionError: 'Verbindungsfehler',
     invalidPeerId: 'Ungültige Peer ID',
-    friendExists: 'Freund existiert bereits'
+    friendExists: 'Freund existiert bereits',
+    
+    // Session management
+    sessionTransferred: 'Session zu neuer App-Instanz übertragen',
+    sessionDeactivatedMessage: 'Diese App-Instanz wurde deaktiviert, da eine andere Instanz geöffnet wurde.',
+    reload: 'Neu laden'
   },
   fr: {
     // Account settings
@@ -141,7 +151,12 @@ export const translations = {
     // Errors
     connectionError: 'Erreur de connexion',
     invalidPeerId: 'ID Peer invalide',
-    friendExists: 'L\'ami existe déjà'
+    friendExists: 'L\'ami existe déjà',
+    
+    // Session management
+    sessionTransferred: 'Session transférée vers une nouvelle instance de l\'application',
+    sessionDeactivatedMessage: 'Cette instance de l\'application a été désactivée car une autre instance a été ouverte.',
+    reload: 'Recharger'
   },
   es: {
     // Account settings
@@ -183,13 +198,18 @@ export const translations = {
     notificationsActivated: 'Activadas',
     notificationsBlocked: 'Bloqueadas',
     notificationsNotRequested: 'No solicitadas',
-    notificationsNotSupported: 'No soportadas',
+    notificationsNotSupported: 'No compatibles',
     notificationsNotAvailable: 'Notificaciones push no disponibles',
     
     // Errors
     connectionError: 'Error de conexión',
     invalidPeerId: 'ID Peer inválido',
-    friendExists: 'El amigo ya existe'
+    friendExists: 'El amigo ya existe',
+    
+    // Session management
+    sessionTransferred: 'Sesión transferida a nueva instancia de la aplicación',
+    sessionDeactivatedMessage: 'Esta instancia de la aplicación ha sido desactivada porque se abrió otra instancia.',
+    reload: 'Recargar'
   },
   bg: {
     // Account settings
@@ -237,7 +257,12 @@ export const translations = {
     // Errors
     connectionError: 'Грешка при свързване',
     invalidPeerId: 'Невалидно Peer ID',
-    friendExists: 'Приятелят вече съществува'
+    friendExists: 'Приятелят вече съществува',
+    
+    // Session management
+    sessionTransferred: 'Сесията е прехвърлена към нова инстанция на приложението',
+    sessionDeactivatedMessage: 'Тази инстанция на приложението е деактивирана, защото беше отворена друга инстанция.',
+    reload: 'Презареди'
   },
   ja: {
     // Account settings
@@ -285,7 +310,12 @@ export const translations = {
     // Errors
     connectionError: '接続エラー',
     invalidPeerId: '無効なPeer ID',
-    friendExists: '友達は既に存在します'
+    friendExists: '友達は既に存在します',
+    
+    // Session management
+    sessionTransferred: 'セッションが新しいアプリインスタンスに転送されました',
+    sessionDeactivatedMessage: 'このアプリインスタンスは、別のインスタンスが開かれたため無効になりました。',
+    reload: '再読み込み'
   },
   ko: {
     // Account settings
@@ -333,7 +363,12 @@ export const translations = {
     // Errors
     connectionError: '연결 오류',
     invalidPeerId: '잘못된 Peer ID',
-    friendExists: '이미 존재하는 친구입니다'
+    friendExists: '이미 존재하는 친구입니다',
+    
+    // Session management
+    sessionTransferred: '세션이 새 앱 인스턴스로 전송되었습니다',
+    sessionDeactivatedMessage: '다른 인스턴스가 열렸기 때문에 이 앱 인스턴스가 비활성화되었습니다.',
+    reload: '새로고침'
   },
   zh: {
     // Account settings
@@ -381,6 +416,11 @@ export const translations = {
     // Errors
     connectionError: '连接错误',
     invalidPeerId: '无效的Peer ID',
-    friendExists: '好友已存在'
+    friendExists: '好友已存在',
+    
+    // Session management
+    sessionTransferred: '会话已转移到新的应用实例',
+    sessionDeactivatedMessage: '此应用实例已被停用，因为另一个实例已打开。',
+    reload: '重新加载'
   }
 }; 

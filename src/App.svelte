@@ -29,6 +29,10 @@
       peerId: string;
       displayName: string;
     }>;
+    activeSession?: {
+      sessionId: string;
+      timestamp: number; // Unix timestamp in milliseconds
+    };
   }
   
   // Application state
@@ -71,6 +75,13 @@
   let notification = '';
   let connectionStatus = 'Initializing...';
   let notificationStatus = '';
+  
+  // Session management
+  let currentSessionId = '';
+  let sessionCheckInterval: ReturnType<typeof setInterval> | null = null;
+  let isSessionActive = true;
+  let lastSessionCheck = 0;
+  let sessionStartTimestamp = 0;
   
   // Language state
   let language: 'en' | 'de' = 'en';
@@ -117,6 +128,12 @@
       connectionManager.closeAllConnections();
       handshakeIntervals.forEach(interval => clearInterval(interval));
       handshakeLoopRunning = false;
+      
+      // Stop session monitoring
+      if (sessionCheckInterval) {
+        clearInterval(sessionCheckInterval);
+        sessionCheckInterval = null;
+      }
     };
   });
   
@@ -173,6 +190,104 @@
     return JSON.parse(jsonString);
   }
   
+  // Generate a unique session ID
+  function generateSessionId(): string {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+  
+  // Initialize session management
+  async function initializeSession() {
+    if (!accountPackage) return;
+    
+    // Generate new session ID
+    currentSessionId = generateSessionId();
+    sessionStartTimestamp = Date.now();
+    
+    console.log('🔐 Initializing session:', currentSessionId, 'at timestamp:', sessionStartTimestamp);
+    
+    // The new instance takes over - update account package with new session
+    // This will cause the old instance to detect the change and shut down
+    await updateAccountPackage({
+      activeSession: {
+        sessionId: currentSessionId,
+        timestamp: sessionStartTimestamp
+      }
+    });
+    
+    console.log('🔐 Session initialized and registered');
+    
+    // Start session monitoring
+    startSessionMonitoring();
+  }
+  
+  // Start monitoring for other sessions
+  function startSessionMonitoring() {
+    // Clear any existing interval
+    if (sessionCheckInterval) {
+      clearInterval(sessionCheckInterval);
+    }
+    
+    // Check every 30 seconds (less aggressive to avoid race conditions)
+    sessionCheckInterval = setInterval(async () => {
+      lastSessionCheck = Date.now();
+      await checkForActiveSession();
+    }, 30000);
+    
+    console.log('👁️ Session monitoring started (30s intervals)');
+  }
+  
+  // Check if another session has taken over
+  async function checkForActiveSession() {
+    if (!isSessionActive || !accountPackage) return;
+    
+    try {
+      // Fetch latest account package
+      const latestPackage = await fetchAccountPackage();
+      
+      if (latestPackage?.activeSession) {
+        const currentTimestamp = Date.now();
+        const timeDiff = currentTimestamp - latestPackage.activeSession.timestamp;
+        
+        console.log(`🔍 Session check - Current: ${currentSessionId} (started: ${sessionStartTimestamp}), Remote: ${latestPackage.activeSession.sessionId} (timestamp: ${latestPackage.activeSession.timestamp}), TimeDiff: ${timeDiff}ms`);
+        
+        // If another session is newer than our session start time and it's not us
+        if (latestPackage.activeSession.timestamp > sessionStartTimestamp && latestPackage.activeSession.sessionId !== currentSessionId) {
+          console.log('⚠️ Newer session detected, shutting down this instance');
+          await handleSessionTransfer();
+        }
+        // Don't update timestamp - sessions should only register once at startup
+      }
+    } catch (error) {
+      console.error('Error checking active session:', error);
+    }
+  }
+  
+  // Handle session transfer to another instance
+  async function handleSessionTransfer() {
+    isSessionActive = false;
+    
+    // Close all connections
+    connectionManager?.closeAllConnections();
+    
+    // Stop all intervals
+    if (sessionCheckInterval) {
+      clearInterval(sessionCheckInterval);
+      sessionCheckInterval = null;
+    }
+    
+    // Stop handshake loop
+    handshakeLoopRunning = false;
+    handshakeIntervals.forEach(interval => clearInterval(interval));
+    handshakeIntervals.clear();
+    
+    // Update UI
+    connectionStatus = t.sessionTransferred;
+    showNotification(t.sessionTransferred);
+    
+    // Disable all interactive elements
+    friends = friends.map(f => ({ ...f, isConnected: false }));
+  }
+  
   // Initialize backend integration
   async function initializeBackend() {
     console.log('🔧 Initializing backend integration...');
@@ -209,6 +324,9 @@
         }
         
         showNotification(`Welcome back, ${fetchedPackage.username}!`);
+        
+        // Initialize session management
+        await initializeSession();
       } else {
         // No account package found - offer to create one
         showAccountCreation = true;
@@ -220,14 +338,18 @@
       isLoadingAccountPackage = false;
     }
     
-    // Initialize peer communication
-    await initializePeerCommunication();
+    // Initialize peer communication only if session is active
+    if (isSessionActive) {
+      await initializePeerCommunication();
+    }
     
     // Update debug info
     updateSessionStorageDebugInfo();
     
-    // Start auto-reconnect for all friends
-    startAutoReconnect();
+    // Start auto-reconnect for all friends only if session is active
+    if (isSessionActive) {
+      startAutoReconnect();
+    }
   }
   
   // Fetch account package from backend
@@ -476,12 +598,20 @@
     accountCreationError = '';
     isLoadingAccountPackage = true;
     
+    // Generate session for new account
+    currentSessionId = generateSessionId();
+    sessionStartTimestamp = Date.now();
+    
     const accountData: AccountPackage = {
       username: accountCreationForm.username.trim(),
       profileImage: accountCreationForm.profileImage.trim() || undefined,
       themeUrl: accountCreationForm.themeUrl.trim() || 'default',
       language: accountCreationForm.language,
-      friends: []
+      friends: [],
+      activeSession: {
+        sessionId: currentSessionId,
+        timestamp: sessionStartTimestamp
+      }
     };
     
     const success = await createAccountPackage(accountData);
@@ -490,6 +620,9 @@
       accountPackage = accountData;
       showAccountCreation = false;
       showNotification('Account package created successfully!');
+      
+      // Start session monitoring
+      startSessionMonitoring();
       
       // Initialize peer communication after account creation
       await initializePeerCommunication();
@@ -555,6 +688,23 @@
   
   // Handle incoming messages from peers
   function handleIncomingMessage(peerId: string, data: any) {
+    console.log(`📨 Incoming message from ${peerId}:`, data.type);
+    
+    // Only check session if it's been more than 30 seconds since last check
+    // to avoid too frequent checks that could cause race conditions
+    const now = Date.now();
+    if (isSessionActive && (!lastSessionCheck || now - lastSessionCheck > 30000)) {
+      console.log('💭 Triggering session check due to incoming message');
+      lastSessionCheck = now;
+      checkForActiveSession();
+    }
+    
+    // Don't process messages if session is not active
+    if (!isSessionActive) {
+      console.log('⚠️ Session not active, ignoring message');
+      return;
+    }
+    
     // Initialize chat messages for this peer if needed
     if (!chatMessages[peerId]) {
       chatMessages[peerId] = [];
@@ -783,6 +933,12 @@
   // Handle sending a message
   function handleSendMessage(event: CustomEvent<{text: string, attachment: FileAttachment | null}>) {
     if (!selectedFriendId) return;
+    
+    // Check if session is still active
+    if (!isSessionActive) {
+      showNotification(t.sessionTransferred);
+      return;
+    }
     
     const { text, attachment } = event.detail;
     
@@ -1493,6 +1649,18 @@
       {notification}
                 </div>
                   {/if}
+  
+  {#if !isSessionActive}
+    <div class="session-overlay">
+      <div class="session-message">
+        <h2>⚠️ {t.sessionTransferred}</h2>
+        <p>{t.sessionDeactivatedMessage}</p>
+        <button class="primary-button" on:click={() => window.location.reload()}>
+          {t.reload}
+        </button>
+      </div>
+    </div>
+  {/if}
                 </div>
 
 <style>
@@ -1666,6 +1834,38 @@
       transform: translateX(0);
       opacity: 1;
     }
+  }
+  
+  .session-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+  }
+  
+  .session-message {
+    background: var(--background-color);
+    padding: 2rem;
+    border-radius: 12px;
+    text-align: center;
+    max-width: 400px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+  
+  .session-message h2 {
+    margin: 0 0 1rem 0;
+    color: var(--notification-color);
+  }
+  
+  .session-message p {
+    margin: 0 0 1.5rem 0;
+    opacity: 0.8;
   }
   
   .sidebar {
