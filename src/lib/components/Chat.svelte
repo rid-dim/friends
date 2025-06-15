@@ -17,6 +17,9 @@
   export let isConnected: boolean = false;
   export let friendName: string = '';
   export let friendPeerId: string = '';
+  export let friendScratchpadAddress: string = '';
+  export let isLoadingScratchpad: boolean = false;
+  export let scratchpadError: boolean = false;
   export let language: 'en' | 'de' = 'en';
   
   const dispatch = createEventDispatcher();
@@ -24,6 +27,8 @@
   let messageInput = '';
   let pendingAttachment: FileAttachment | null = null;
   let messagesContainer: HTMLDivElement;
+  let showPeerIdInput = false;
+  let newPeerId = '';
   
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -98,13 +103,58 @@
   <div class="chat-header">
     <div class="friend-info">
       <h2>{friendName || t.selectFriend}</h2>
-      {#if friendPeerId && friendName}
-        <div class="friend-peer-id">
-          <span class="label">ID:</span>
-          <button class="peer-id" on:click={() => copyPeerId(friendPeerId)} title="Click to copy">
-            {friendPeerId.slice(0, 8)}...
-          </button>
-        </div>
+      {#if friendName}
+        {#if isLoadingScratchpad}
+          <div class="loading-scratchpad">
+            <div class="small-spinner"></div>
+            <span>Creating communication channel...</span>
+          </div>
+        {:else if scratchpadError}
+          <div class="scratchpad-error">
+            <span>Error creating communication channel</span>
+          </div>
+        {:else if friendScratchpadAddress}
+          <div class="friend-contact-id">
+            <span class="label">Contact ID for {friendName}:</span>
+            <button class="peer-id" on:click={() => copyPeerId(friendScratchpadAddress)} title="Click to copy">
+              {friendScratchpadAddress.slice(0, 8)}...
+            </button>
+          </div>
+          {#if friendPeerId}
+            <div class="friend-peer-id">
+              <span class="label">Peer ID:</span>
+              <button class="peer-id" on:click={() => copyPeerId(friendPeerId)} title="Click to copy">
+                {friendPeerId.slice(0, 8)}...
+              </button>
+            </div>
+          {:else}
+            {#if !showPeerIdInput}
+              <button class="add-peer-id" on:click={() => showPeerIdInput = true} title="Add friend's peer ID">
+                + Add Peer ID
+              </button>
+            {/if}
+            {#if showPeerIdInput}
+              <div class="peer-id-input">
+                <input
+                  type="text"
+                  bind:value={newPeerId}
+                  placeholder="Enter friend's peer ID"
+                />
+                <button on:click={() => {
+                  if (newPeerId.trim()) {
+                    dispatch('updatePeerId', { peerId: newPeerId.trim() });
+                    showPeerIdInput = false;
+                    newPeerId = '';
+                  }
+                }}>Save</button>
+                <button on:click={() => {
+                  showPeerIdInput = false;
+                  newPeerId = '';
+                }}>Cancel</button>
+              </div>
+            {/if}
+          {/if}
+        {/if}
       {/if}
     </div>
     <div class="connection-indicator">
@@ -210,10 +260,12 @@
   }
   
   .friend-peer-id {
+    font-size: 0.8rem;
+    color: var(--foreground-color2);
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
   }
   
   .friend-peer-id .label {
@@ -395,5 +447,114 @@
   .send-button:disabled {
     cursor: not-allowed;
     opacity: 0.6;
+  }
+  
+  .friend-contact-id {
+    font-size: 0.8rem;
+    color: var(--foreground-color2);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .friend-contact-id .label {
+    opacity: 0.7;
+  }
+  
+  .friend-contact-id .peer-id {
+    font-family: monospace;
+    background: var(--background-color);
+    border: 1px solid var(--line-color);
+    border-radius: 4px;
+    padding: 0.125rem 0.375rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: background 0.2s;
+  }
+  
+  .friend-contact-id .peer-id:hover {
+    background: var(--foreground-color1);
+  }
+  
+  .add-peer-id {
+    background: var(--notification-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  
+  .add-peer-id:hover {
+    opacity: 0.8;
+  }
+  
+  .peer-id-input {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    width: 100%;
+  }
+  
+  .peer-id-input input {
+    flex: 1;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--line-color);
+    border-radius: 4px;
+    background: var(--background-color);
+    color: inherit;
+    font-size: 0.8rem;
+  }
+  
+  .peer-id-input button {
+    padding: 0.25rem 0.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  
+  .peer-id-input button:first-of-type {
+    background: var(--notification-color);
+    color: white;
+  }
+  
+  .peer-id-input button:last-of-type {
+    background: var(--foreground-color2);
+    color: var(--text-color);
+  }
+  
+  .peer-id-input button:hover {
+    opacity: 0.8;
+  }
+  
+  .loading-scratchpad {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--foreground-color2);
+  }
+  
+  .small-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--foreground-color1);
+    border-top-color: var(--notification-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  .scratchpad-error {
+    font-size: 0.8rem;
+    color: var(--notification-color);
   }
 </style> 

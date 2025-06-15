@@ -21,13 +21,15 @@
   
   // Backend and account package related types
   interface AccountPackage {
+    version: number; // Version of the account package format
     username: string;
     profileImage?: string; // datamap address
     themeUrl?: string; // theme URL
     language?: 'en' | 'de';
     friends?: Array<{
-      peerId: string;
+      peerId?: string; // Optional - can be added later
       displayName: string;
+      scratchpadAddress?: string; // The scratchpad address for this friend
     }>;
     activeSession?: {
       sessionId: string;
@@ -39,7 +41,7 @@
   let accountPackage: AccountPackage | null = null;
   let backendUrl = '';
   let accountName = '';
-  let myPeerId = '';
+  let profileId = '';
   let isLoadingPeerId = false;
   let isLoadingAccountPackage = false;
   let showAccountCreation = false;
@@ -96,6 +98,12 @@
   
   // Initialize connection manager
   onMount(() => {
+    const rtcConfig: RTCConfiguration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
     connectionManager = new ConnectionManager({
       onMessage: handleIncomingMessage,
       onConnectionStateChange: handleConnectionStateChange,
@@ -173,6 +181,91 @@
     const objectName = buildCommObjectName();
     const baseUrl = backendUrl ? `${backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
     return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
+  }
+  
+  // Build friend-specific scratchpad URL
+  function buildFriendScratchpadUrl(friendName: string): string {
+    const objectName = accountName ? `${friendName}comm${accountName}` : `${friendName}comm`;
+    const baseUrl = backendUrl ? `${backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
+    return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
+  }
+  
+  // Create or get friend scratchpad
+  async function createOrGetFriendScratchpad(friendName: string): Promise<string> {
+    const url = buildFriendScratchpadUrl(friendName);
+    console.log('🌐 Creating/getting friend scratchpad:', url);
+    
+    try {
+      // First try to get existing scratchpad
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'Ant-App-ID': 'friends'
+        }
+      });
+      
+      if (response.ok) {
+        const scratchpadData = await response.json();
+        
+        let chunk = null;
+        if (Array.isArray(scratchpadData) && scratchpadData.length > 0) {
+          chunk = scratchpadData[0];
+        } else if (scratchpadData && scratchpadData.dweb_type === "PublicScratchpad") {
+          chunk = scratchpadData;
+        }
+        
+        if (chunk && chunk.scratchpad_address) {
+          console.log('✅ Found existing friend scratchpad:', chunk.scratchpad_address);
+          return chunk.scratchpad_address;
+        }
+      } else if (response.status === 404) {
+        // Create new scratchpad
+        const friendInfo = {
+          type: 'friend-communication',
+          friendName: friendName,
+          createdAt: new Date().toISOString(),
+          accountName: accountName || null
+        };
+        
+        const friendInfoJson = JSON.stringify(friendInfo);
+        const friendInfoBytes = jsonToByteArray(friendInfoJson);
+        
+        const scratchpadPayload = {
+          counter: 0,
+          data_encoding: 0,
+          dweb_type: "PublicScratchpad",
+          encryped_data: [0],
+          scratchpad_address: "string",
+          unencrypted_data: friendInfoBytes
+        };
+        
+        const createResponse = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Ant-App-ID': 'friends'
+          },
+          body: JSON.stringify(scratchpadPayload)
+        });
+        
+        if (!createResponse.ok) {
+          throw new Error(`HTTP ${createResponse.status}: ${createResponse.statusText}`);
+        }
+        
+        const createdScratchpad = await createResponse.json();
+        
+        if (createdScratchpad && createdScratchpad.scratchpad_address) {
+          console.log('✅ Created new friend scratchpad:', createdScratchpad.scratchpad_address);
+          return createdScratchpad.scratchpad_address;
+        }
+      }
+      
+      throw new Error('Failed to create or get friend scratchpad');
+    } catch (error) {
+      console.error('❌ Error with friend scratchpad:', error);
+      throw error;
+    }
   }
   
   // Convert JSON to byte array for scratchpad storage
@@ -308,6 +401,7 @@
           friends = fetchedPackage.friends.map(f => ({
             peerId: f.peerId,
             displayName: f.displayName,
+            scratchpadAddress: f.scratchpadAddress,
             isConnected: false,
             unreadCount: 0
           }));
@@ -389,6 +483,16 @@
         try {
           const accountPackage = byteArrayToJson(chunk.unencrypted_data);
           console.log('✅ Successfully loaded account package:', accountPackage);
+          
+          // Check version and migrate if needed
+          if (!accountPackage.version || accountPackage.version < 1) {
+            console.log('🔄 Migrating account package to version 1');
+            // Remove all friends as they need to be recreated with new scratchpad approach
+            accountPackage.friends = [];
+            accountPackage.version = 1;
+            showNotification('Account package upgraded. Please re-add your friends.');
+          }
+          
           return accountPackage as AccountPackage;
         } catch (error) {
           console.error('❌ Error parsing account package:', error);
@@ -524,8 +628,8 @@
         }
         
         if (chunk && chunk.scratchpad_address) {
-          myPeerId = chunk.scratchpad_address;
-          console.log('✅ Retrieved peer ID:', myPeerId);
+                  profileId = chunk.scratchpad_address;
+        console.log('✅ Retrieved profile ID:', profileId);
         }
       } else if (response.status === 404) {
         // Create new public scratchpad
@@ -580,8 +684,8 @@
       const createdScratchpad = await response.json();
       
       if (createdScratchpad && createdScratchpad.scratchpad_address) {
-        myPeerId = createdScratchpad.scratchpad_address;
-        console.log('✅ New peer ID:', myPeerId);
+        profileId = createdScratchpad.scratchpad_address;
+        console.log('✅ New profile ID:', profileId);
       }
     } catch (error) {
       console.error('❌ Error creating public scratchpad:', error);
@@ -603,6 +707,7 @@
     sessionStartTimestamp = Date.now();
     
     const accountData: AccountPackage = {
+      version: 1, // Version 1 of the account package format
       username: accountCreationForm.username.trim(),
       profileImage: accountCreationForm.profileImage.trim() || undefined,
       themeUrl: accountCreationForm.themeUrl.trim() || 'default',
@@ -838,7 +943,10 @@
     selectedFriendId = event.detail;
     
     // Clear unread count
-    const friend = friends.find(f => f.peerId === event.detail);
+    const friend = friends.find(f => 
+      (f.peerId && f.peerId === event.detail) || 
+      (!f.peerId && f.displayName === event.detail)
+    );
     if (friend) {
       friend.unreadCount = 0;
       friends = friends;
@@ -846,56 +954,107 @@
   }
   
   // Handle adding a new friend
-  function handleAddFriend(event: CustomEvent<{peerId: string, displayName: string}>) {
+  async function handleAddFriend(event: CustomEvent<{peerId: string | undefined, displayName: string}>) {
     const { peerId, displayName } = event.detail;
     
-    // Check if friend already exists
-    if (friends.some(f => f.peerId === peerId)) {
-      showNotification('Friend already exists');
+    // Check if friend already exists by display name
+    if (friends.some(f => f.displayName === displayName)) {
+      showNotification('Friend with this name already exists');
       return;
     }
     
-    // Add new friend
+    // Add new friend immediately with loading state
     const newFriend: Friend = {
       peerId,
       displayName,
+      scratchpadAddress: undefined, // Will be set after creation
       isConnected: false,
-      unreadCount: 0
+      unreadCount: 0,
+      isLoadingScratchpad: true // Add loading state
     };
     
     friends = [...friends, newFriend];
     
-    // Save to localStorage
+    // Select the new friend to show the loading state
+    selectedFriendId = peerId || displayName;
+    
+    // Save to localStorage immediately (without scratchpad address)
     saveFriends();
     
-    // Start connection attempt with auto-reconnect
-    startAutoReconnectForFriend(peerId);
-    
-    showNotification(`Added ${displayName} as friend`);
+    // Create or get friend scratchpad in background
+    try {
+      const scratchpadAddress = await createOrGetFriendScratchpad(displayName);
+      
+      // Update friend with scratchpad address
+      const friendIndex = friends.findIndex(f => f.displayName === displayName);
+      if (friendIndex !== -1) {
+        friends[friendIndex] = {
+          ...friends[friendIndex],
+          scratchpadAddress,
+          isLoadingScratchpad: false
+        };
+        friends = [...friends];
+        
+        // Save again with scratchpad address
+        saveFriends();
+        
+        showNotification(`Friend ${displayName} added successfully`);
+        
+        // If friend has peerId, start connection attempt
+        if (peerId) {
+          startAutoReconnectForFriend(peerId);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating friend scratchpad:', error);
+      
+      // Update friend to show error state
+      const friendIndex = friends.findIndex(f => f.displayName === displayName);
+      if (friendIndex !== -1) {
+        friends[friendIndex] = {
+          ...friends[friendIndex],
+          isLoadingScratchpad: false,
+          scratchpadError: true
+        };
+        friends = [...friends];
+      }
+      
+      showNotification('Error creating friend scratchpad');
+    }
   }
   
   // Handle removing a friend
   function handleRemoveFriend(event: CustomEvent<string>) {
-    const peerId = event.detail;
+    const id = event.detail;
     
-    // Close connection
-    connectionManager.closeConnection(peerId);
+    // Find friend by peerId or displayName
+    const friend = friends.find(f => 
+      (f.peerId && f.peerId === id) || 
+      (!f.peerId && f.displayName === id)
+    );
     
-    // Stop auto-reconnect for this friend
-    const interval = handshakeIntervals.get(peerId);
-    if (interval) {
-      clearInterval(interval);
-      handshakeIntervals.delete(peerId);
+    if (!friend) return;
+    
+    // Close connection if peerId exists
+    if (friend.peerId) {
+      connectionManager.closeConnection(friend.peerId);
+      
+      // Stop auto-reconnect for this friend
+      const interval = handshakeIntervals.get(friend.peerId);
+      if (interval) {
+        clearInterval(interval);
+        handshakeIntervals.delete(friend.peerId);
+      }
+      
+      // Clear chat messages
+      delete chatMessages[friend.peerId];
     }
     
     // Remove from friends list
-    friends = friends.filter(f => f.peerId !== peerId);
-    
-    // Clear chat messages
-    delete chatMessages[peerId];
+    friends = friends.filter(f => f !== friend);
     
     // Clear selection if this friend was selected
-    if (selectedFriendId === peerId) {
+    if (selectedFriendId === id) {
       selectedFriendId = null;
     }
     
@@ -905,13 +1064,39 @@
     showNotification('Friend removed');
   }
   
+  // Handle updating peer ID for a friend
+  async function handleUpdatePeerId(event: CustomEvent<{peerId: string}>) {
+    if (!selectedFriend) return;
+    
+    const { peerId } = event.detail;
+    
+    // Update the friend's peerId
+    const friendIndex = friends.findIndex(f => f.displayName === selectedFriend.displayName);
+    if (friendIndex !== -1) {
+      friends[friendIndex] = {
+        ...friends[friendIndex],
+        peerId
+      };
+      friends = [...friends];
+      
+      // Save to localStorage and account package
+      saveFriends();
+      
+      // Start connection attempt
+      startAutoReconnectForFriend(peerId);
+      
+      showNotification(`Peer ID updated for ${selectedFriend.displayName}`);
+    }
+  }
+  
   // Save friends to localStorage
   function saveFriends() {
     if (!browser) return;
     
     const friendsData = friends.map(f => ({
       peerId: f.peerId,
-      displayName: f.displayName
+      displayName: f.displayName,
+      scratchpadAddress: f.scratchpadAddress
     }));
     
     localStorage.setItem('friends', JSON.stringify(friendsData));
@@ -923,7 +1108,7 @@
   }
   
   // Update account package with friends list
-  async function updateAccountPackageFriends(friendsData: Array<{peerId: string, displayName: string}>) {
+  async function updateAccountPackageFriends(friendsData: Array<{peerId?: string, displayName: string, scratchpadAddress?: string}>) {
     const success = await updateAccountPackage({ friends: friendsData });
     if (success) {
       console.log('✅ Friends list saved to account package');
@@ -932,7 +1117,7 @@
   
   // Handle sending a message
   function handleSendMessage(event: CustomEvent<{text: string, attachment: FileAttachment | null}>) {
-    if (!selectedFriendId) return;
+    if (!selectedFriend) return;
     
     // Check if session is still active
     if (!isSessionActive) {
@@ -951,29 +1136,37 @@
       attachment: attachment || undefined
     };
     
+    // Use peerId if available, otherwise use displayName as key
+    const messageKey = selectedFriend.peerId || selectedFriend.displayName;
+    
     // Add to local messages
-    if (!chatMessages[selectedFriendId]) {
-      chatMessages[selectedFriendId] = [];
+    if (!chatMessages[messageKey]) {
+      chatMessages[messageKey] = [];
     }
-    chatMessages[selectedFriendId] = [...chatMessages[selectedFriendId], message];
+    chatMessages[messageKey] = [...chatMessages[messageKey], message];
     
-    // Send via WebRTC
-    const messageData = {
-      type: 'chat',
-      nick: message.nick,
-      message: text,
-      timestamp: message.timestamp.toISOString(),
-      attachment: attachment ? {
-        ...attachment,
-        data: attachment.size > 50000 ? undefined : attachment.data
-      } : undefined
-    };
-    
-    if (attachment && attachment.size > 50000 && attachment.data) {
-      // Send large files in chunks
-      connectionManager.sendLargeFileInChunks(selectedFriendId, messageData, attachment);
+    // Only send via WebRTC if friend has peerId
+    if (selectedFriend.peerId) {
+      const messageData = {
+        type: 'chat',
+        nick: message.nick,
+        message: text,
+        timestamp: message.timestamp.toISOString(),
+        attachment: attachment ? {
+          ...attachment,
+          data: attachment.size > 50000 ? undefined : attachment.data
+        } : undefined
+      };
+      
+      if (attachment && attachment.size > 50000 && attachment.data) {
+        // Send large files in chunks
+        connectionManager.sendLargeFileInChunks(selectedFriend.peerId, messageData, attachment);
+      } else {
+        connectionManager.sendMessage(selectedFriend.peerId, messageData);
+      }
     } else {
-      connectionManager.sendMessage(selectedFriendId, messageData);
+      // If no peerId, show message that friend needs to add their peer ID
+      showNotification('Friend needs to add their peer ID to receive messages');
     }
   }
   
@@ -1161,10 +1354,15 @@
   }
   
   // Get current chat messages
-  $: currentChatMessages = selectedFriendId ? (chatMessages[selectedFriendId] || []) : [];
+  $: currentChatMessages = selectedFriend 
+    ? (chatMessages[selectedFriend.peerId || selectedFriend.displayName] || []) 
+    : [];
   
   // Get selected friend
-  $: selectedFriend = friends.find(f => f.peerId === selectedFriendId);
+  $: selectedFriend = friends.find(f => 
+    (f.peerId && f.peerId === selectedFriendId) || 
+    (!f.peerId && f.displayName === selectedFriendId)
+  );
   
   // Update session storage debug info
   function updateSessionStorageDebugInfo() {
@@ -1175,7 +1373,7 @@
         accountPackage,
         backendUrl,
         accountName,
-        myPeerId,
+        profileId,
         friends,
         selectedFriendId,
         connectionStatus,
@@ -1232,14 +1430,20 @@
       
       for (const friend of disconnectedFriends) {
         const peerId = friend.peerId;
+        
+        // Skip friends without peerId or scratchpad address
+        if (!peerId || !friend.scratchpadAddress) {
+          continue;
+        }
+        
         const connection = connectionManager.getConnection(peerId);
         
         if (connection && (connection.isConnected || connection.isConnecting)) {
           continue; // Skip friends who are already connected or connecting
         }
         
-        // Determine priority based on peer ID comparison
-        const isHighPriority = myPeerId.localeCompare(peerId) > 0;
+        // Determine priority based on contact ID comparison (friend-specific)
+        const isHighPriority = calculateFriendPriority(friend);
         
         // Calculate time until next attempt
         let nextAttemptSeconds;
@@ -1272,9 +1476,14 @@
     friends.forEach(friend => {
       // If friend is already connected, don't interfere
       if (friend.isConnected) {
-      return;
-    }
-    
+        return;
+      }
+      
+      // Skip friends without peerId
+      if (!friend.peerId) {
+        return;
+      }
+      
       // Initialize countdown
       handshakeCountdowns[friend.peerId] = 60;
     });
@@ -1312,7 +1521,7 @@
   
   // Start handshake process for a specific friend
   async function startHandshakeForFriend(peerId: string) {
-    if (!myPeerId || !peerId) return;
+    if (!profileId || !peerId) return;
     
     // Check if we're already trying to connect to this peer
     const existingConnection = connectionManager.getConnection(peerId);
@@ -1323,20 +1532,31 @@
     
     // Close any existing failed connection before creating a new one
     if (existingConnection) {
+      console.log(`[${peerId}] Closing existing connection before creating new one`);
       connectionManager.closeConnection(peerId);
       // Wait a bit for cleanup
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    const connection = connectionManager.createConnection(peerId);
+    // Small delay to ensure clean state
+    await new Promise(resolve => setTimeout(resolve, 100));
     
+    const connection = connectionManager.createConnection(peerId);
+    console.log(`[${peerId}] Created new connection`);
+
     try {
-      // Determine priority based on peer ID comparison
-      // Use consistent string comparison to ensure both peers make the same decision
-      const isHighPriority = myPeerId.localeCompare(peerId) > 0;
+      // Find the friend to get their scratchpad address
+      const friend = friends.find(f => f.peerId === peerId);
+      if (!friend || !friend.scratchpadAddress) {
+        console.error(`No scratchpad address found for friend ${peerId}`);
+        return;
+      }
+      
+      // Determine priority based on contact ID comparison (friend-specific)
+      const isHighPriority = calculateFriendPriority(friend);
       
       console.log(`[${peerId}] Handshake role: ${isHighPriority ? 'Initiator (create offer)' : 'Responder (wait for offer)'}`);
-      console.log(`[${peerId}] My ID: ${myPeerId}, Friend ID: ${peerId}`);
+      console.log(`[${peerId}] Using friend-specific priority based on contact IDs`);
       
       if (isHighPriority) {
         // Create and post offer to MY handshake server location
@@ -1349,90 +1569,156 @@
         // Wait for offer from peer's handshake data
         pollForHandshake(peerId, 'offer');
       }
-        } catch (error) {
+    } catch (error) {
       console.error(`[${peerId}] Handshake failed:`, error);
       updateFriendConnectionStatus(peerId, false);
     }
   }
   
-  // Post handshake data to server using peer IDs
+  // Validate that contact ID is in correct handshake server format (96-char hex)
+  function validateHandshakeAddress(contactId: string): boolean {
+    const hexPattern = /^[a-f0-9]{96}$/;
+    return hexPattern.test(contactId);
+  }
+
+  // Post handshake data to server using contact IDs directly
   async function postHandshake(peerId: string, type: 'offer' | 'answer', data: RTCSessionDescriptionInit) {
     try {
-      // Create a unique key for this handshake session to avoid conflicts
-      const sessionKey = `${type}_${Date.now()}`;
-      const timestamp = new Date().toISOString();
-      
-      // The handshake data structure
-      const handshakeData = {
-        from: myPeerId,
-        to: peerId,
-        type: type,
-        data: JSON.stringify(data),
-        timestamp: timestamp,
-        sessionKey: sessionKey
-      };
-      
-      // PUT handshake data to MY scratchpad address
-      const success = await putHandshakeData(myPeerId, handshakeData);
-      
-      if (!success) {
-        throw new Error(`Failed to post ${type}`);
+      // Find the friend to get their contact information
+      const friend = friends.find(f => f.peerId === peerId);
+      if (!friend || !friend.scratchpadAddress) {
+        throw new Error(`No friend found or no contact ID for ${peerId}`);
       }
       
-      console.log(`[${peerId}] Posted ${type} to handshake server at ${myPeerId} with timestamp ${timestamp}`);
+      // Use contact IDs directly as the address
+      // Always write to my contact ID - the partner will read from there
+      const myContactId = friend.scratchpadAddress; // This is my contact ID for this friend
+      const theirPeerId = peerId; // This is their peer ID (their contact ID for me)
+      
+      // Validate contact ID format
+      if (!validateHandshakeAddress(myContactId)) {
+        console.error(`[${peerId}] Invalid contact ID format: ${myContactId}`);
+        console.error(`[${peerId}] Expected 96-character hex string, got: ${myContactId.length} characters`);
+        throw new Error(`Invalid contact ID format for handshake server`);
+      }
+      
+      const handshakeAddress = myContactId; // Use contact ID directly
+      
+      // The handshake data structure with timestamp
+      const handshakeData = {
+        from: myContactId,
+        to: theirPeerId,
+        type: type,
+        timestamp: new Date().toISOString(),
+        data: JSON.stringify(data)
+      };
+      
+      // Convert to binary data
+      const handshakeJson = JSON.stringify(handshakeData);
+      const encoder = new TextEncoder();
+      const handshakeBytes = encoder.encode(handshakeJson);
+      
+      // PUT to external handshake server
+      const response = await fetch(`${handshakeServerUrl}/${handshakeAddress}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+        body: handshakeBytes
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to post ${type}: ${response.statusText}`);
+      }
+      
+      console.log(`[${peerId}] Posted ${type} to handshake server at address: ${handshakeAddress.slice(0,16)}...`);
+      console.log(`[${peerId}] ${type} SDP preview:`, JSON.stringify(data).substring(0, 200) + '...');
     } catch (error) {
-      console.error(`[${peerId}] Failed to post ${type}:`, error);
-      throw error;
+      console.error(`[${peerId}] Error posting ${type}:`, error);
     }
   }
 
   // Get handshake data from server
-  async function getHandshakeData(scratchpadAddress: string): Promise<any> {
+  async function getHandshakeData(peerId: string, expectedType: 'offer' | 'answer'): Promise<any> {
     try {
-      const response = await fetch(`${handshakeServerUrl}/${scratchpadAddress}`, {
+      // Find the friend to get contact information
+      const friend = friends.find(f => f.peerId === peerId);
+      if (!friend || !friend.scratchpadAddress) {
+        throw new Error(`No friend found or no contact ID for ${peerId}`);
+      }
+      
+      const myContactId = friend.scratchpadAddress;
+      const theirPeerId = peerId; // This is their peer ID (their contact ID for me)
+      
+      // Validate their peer ID format
+      if (!validateHandshakeAddress(theirPeerId)) {
+        console.error(`[${peerId}] Invalid peer ID format: ${theirPeerId}`);
+        console.error(`[${peerId}] Expected 96-character hex string, got: ${theirPeerId.length} characters`);
+        throw new Error(`Invalid peer ID format for handshake server`);
+      }
+      
+      // Always read from their peer ID - they write to their contact ID
+      const handshakeAddress = theirPeerId;
+      
+      // GET from external handshake server
+      const response = await fetch(`${handshakeServerUrl}/${handshakeAddress}`, {
         method: 'GET'
       });
       
       if (!response.ok) {
-        return null;
+        if (response.status === 404) {
+          return null; // No data yet
+        }
+        throw new Error(`Failed to get ${expectedType}: ${response.statusText}`);
       }
       
-      const binaryData = await response.arrayBuffer();
-      if (binaryData.byteLength === 0) {
-        return null;
+      // Get binary data and decode
+      const responseBody = await response.arrayBuffer();
+      if (responseBody.byteLength === 0) {
+        return null; // No data yet
       }
       
       const decoder = new TextDecoder();
-      const jsonString = decoder.decode(binaryData);
-      return JSON.parse(jsonString);
+      const handshakeJson = decoder.decode(responseBody);
+      const handshakeData = JSON.parse(handshakeJson);
+      
+      // Check if data is recent (less than 30 seconds old)
+      const timestamp = new Date(handshakeData.timestamp);
+      const age = Date.now() - timestamp.getTime();
+      if (age > 30000) { // 30 seconds
+        console.log(`[${peerId}] Ignoring old ${expectedType} (${Math.round(age/1000)}s old)`);
+        return null;
+      }
+      
+      // Verify this is the expected type and it's for us
+      if (handshakeData.type !== expectedType) {
+        console.log(`[${peerId}] Expected ${expectedType} but got ${handshakeData.type}`);
+        return null;
+      }
+      
+      if (handshakeData.to !== myContactId) {
+        console.log(`[${peerId}] Message is for ${handshakeData.to}, not for us (${myContactId})`);
+        return null;
+      }
+      
+      if (handshakeData.from !== theirPeerId) {
+        console.log(`[${peerId}] Message is from ${handshakeData.from}, not from expected peer (${theirPeerId})`);
+        return null;
+      }
+      
+      return {
+        data: JSON.parse(handshakeData.data),
+        timestamp: handshakeData.timestamp
+      };
     } catch (error) {
-      console.error('Error getting handshake data:', error);
+      if (error instanceof Error && error.message.includes('404')) {
+        return null; // No data yet
+      }
+      console.error(`[${peerId}] Error getting ${expectedType}:`, error);
       return null;
     }
   }
 
-  // Put handshake data to server
-  async function putHandshakeData(scratchpadAddress: string, data: any): Promise<boolean> {
-    try {
-      const jsonData = JSON.stringify(data);
-      const encoder = new TextEncoder();
-      const binaryData = encoder.encode(jsonData);
-      
-      const response = await fetch(`${handshakeServerUrl}/${scratchpadAddress}`, {
-        method: 'PUT',
-        body: binaryData,
-        headers: {
-          'Content-Type': 'application/octet-stream'
-        }
-      });
-      
-      return response.ok;
-      } catch (error) {
-      console.error('Error putting handshake data:', error);
-        return false;
-      }
-    }
-    
   // Poll for handshake data from server
   async function pollForHandshake(peerId: string, expectedType: 'offer' | 'answer') {
     const maxAttempts = 30; // 30 seconds timeout
@@ -1445,57 +1731,107 @@
         console.log(`[${peerId}] Handshake timeout waiting for ${expectedType}`);
         updateFriendConnectionStatus(peerId, false);
         return;
-    }
-    
-    try {
-        // GET handshake data from FRIEND's scratchpad
-        const data = await getHandshakeData(peerId);
+      }
+      
+      try {
+        // GET handshake data from external server
+        const result = await getHandshakeData(peerId, expectedType);
         
-        if (!data) {
+        if (!result) {
           return; // No data yet
         }
         
-        // Check if this is the expected type and for us
-        if (data.type === expectedType && data.to === myPeerId && data.from === peerId) {
-          // Check if the data is recent (not older than 45 seconds)
-          const dataTimestamp = new Date(data.timestamp).getTime();
-          const currentTime = new Date().getTime();
-          if (currentTime - dataTimestamp > 45000) {
-            console.log(`[${peerId}] Ignoring outdated ${expectedType} with timestamp ${data.timestamp}`);
-            return;
-          }
+        // Check if we've already processed this (avoid duplicates)
+        if (result.timestamp === lastProcessedTimestamp) {
+          return;
+        }
+        
+        clearInterval(pollInterval);
+        lastProcessedTimestamp = result.timestamp;
+        
+        const connection = connectionManager.getConnection(peerId);
+        
+        if (!connection) {
+          console.error(`[${peerId}] No connection found for handshake`);
+          return;
+        }
+        
+        if (expectedType === 'offer') {
+          // We received an offer, create and send answer
+          console.log(`[${peerId}] Received offer, SDP preview:`, JSON.stringify(result.data).substring(0, 200) + '...');
+          const answer = await connection.createAnswer(result.data);
+          await postHandshake(peerId, 'answer', answer);
+          console.log(`[${peerId}] Created and sent answer`);
           
-          // Check if we've already processed this (avoid duplicates)
-          if (data.timestamp === lastProcessedTimestamp) {
-      return;
-    }
-    
-          clearInterval(pollInterval);
-          lastProcessedTimestamp = data.timestamp;
+          // No separate ICE candidates needed - they're in the SDP
+          console.log(`[${peerId}] Using integrated ICE candidates in SDP (no separate messages)`);
+        } else if (expectedType === 'answer') {
+          // We received an answer, set it as remote description
+          console.log(`[${peerId}] Received answer, SDP preview:`, JSON.stringify(result.data).substring(0, 200) + '...');
+          await connection.setRemoteAnswer(result.data);
+          console.log(`[${peerId}] Set answer as remote description`);
           
-          const handshakeData = JSON.parse(data.data);
-          const connection = connectionManager.getConnection(peerId);
-          
-          if (!connection) {
-            console.error(`[${peerId}] No connection found for handshake`);
-            return;
-          }
-          
-          if (expectedType === 'offer') {
-            // We received an offer, create and send answer
-            const answer = await connection.createAnswer(handshakeData);
-            await postHandshake(peerId, 'answer', answer);
-            console.log(`[${peerId}] Received offer, sent answer`);
-        } else {
-            // We received an answer, set it as remote description
-            await connection.setRemoteAnswer(handshakeData);
-            console.log(`[${peerId}] Received and set answer`);
-          }
-      }
-    } catch (error) {
+          // Debug: Check connection state after setting answer
+          setTimeout(() => {
+            const conn = connectionManager.getConnection(peerId);
+            if (conn) {
+              console.log(`[${peerId}] Post-answer connection check:`);
+              console.log(`[${peerId}] - Connection state: ${conn.connection.connectionState}`);
+              console.log(`[${peerId}] - ICE connection state: ${conn.connection.iceConnectionState}`);
+              console.log(`[${peerId}] - ICE gathering state: ${conn.connection.iceGatheringState}`);
+              console.log(`[${peerId}] - Signaling state: ${conn.connection.signalingState}`);
+              
+              // Check if we have any ICE candidates in SDP
+              const localDesc = conn.connection.localDescription;
+              const remoteDesc = conn.connection.remoteDescription;
+              
+              if (localDesc) {
+                const localCandidates = localDesc.sdp.split('\n').filter(line => line.includes('a=candidate'));
+                console.log(`[${peerId}] - Local SDP candidates: ${localCandidates.length}`);
+              }
+              
+              if (remoteDesc) {
+                const remoteCandidates = remoteDesc.sdp.split('\n').filter(line => line.includes('a=candidate'));
+                console.log(`[${peerId}] - Remote SDP candidates: ${remoteCandidates.length}`);
+              }
+            }
+          }, 2000);
+        }
+      } catch (error) {
         console.error(`[${peerId}] Poll error:`, error);
       }
     }, 1000);
+  }
+
+  // Check if we have the necessary data to start a handshake
+  function canStartHandshake(peerId: string): boolean {
+    if (!profileId || !peerId) return false;
+    
+    const friend = friends.find(f => f.peerId === peerId);
+    return !!(friend && friend.scratchpadAddress);
+  }
+
+  // Calculate priority for a specific friend based on contact IDs
+  function calculateFriendPriority(friend: any): boolean {
+    if (!friend.scratchpadAddress) return false;
+    
+    const myContactId = friend.scratchpadAddress; // My contact ID for this friend
+    const theirPeerId = friend.peerId; // Their peer ID (their contact ID for me)
+    
+    // Convert IDs to numbers for comparison
+    // Use a simple hash of the first 16 hex characters
+    const myValue = parseInt(myContactId.substring(0, 16), 16);
+    const theirValue = parseInt(theirPeerId.substring(0, 16), 16);
+    
+    // Higher value has priority and creates the offer
+    const isHighPriority = myValue > theirValue;
+    
+    // console.log(`[${friend.peerId}] Priority calculation:`);
+    // console.log(`  My contact ID: ${myContactId.substring(0, 16)}... = ${myValue}`);
+    // console.log(`  Their peer ID: ${theirPeerId.substring(0, 16)}... = ${theirValue}`);
+    // console.log(`  I have priority: ${isHighPriority}`);
+    
+    return isHighPriority;
   }
 </script>
 
@@ -1619,7 +1955,7 @@
       <FriendsList
         {friends}
         {selectedFriendId}
-        {myPeerId}
+        {profileId}
         myUsername={accountPackage?.username || 'User'}
         {handshakeCountdowns}
         {language}
@@ -1637,9 +1973,13 @@
         isConnected={selectedFriend?.isConnected || false}
         friendName={selectedFriend?.displayName || ''}
         friendPeerId={selectedFriend?.peerId || ''}
+        friendScratchpadAddress={selectedFriend?.scratchpadAddress || ''}
+        isLoadingScratchpad={selectedFriend?.isLoadingScratchpad || false}
+        scratchpadError={selectedFriend?.scratchpadError || false}
         {language}
         on:sendMessage={handleSendMessage}
         on:notification={(e) => showNotification(e.detail)}
+        on:updatePeerId={handleUpdatePeerId}
       />
               </div>
                 </div>

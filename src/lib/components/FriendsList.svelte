@@ -1,9 +1,12 @@
 <script context="module" lang="ts">
   export interface Friend {
-    peerId: string;
+    peerId?: string;
+    scratchpadAddress?: string;
     displayName: string;
     isConnected: boolean;
     unreadCount: number;
+    isLoadingScratchpad?: boolean;
+    scratchpadError?: boolean;
   }
 </script>
 
@@ -13,8 +16,8 @@
   
   export let friends: Friend[] = [];
   export let selectedFriendId: string | null = null;
-  export let myPeerId: string = '';
-  export let myUsername: string = '';
+  export let profileId: string = '';
+  export let myUsername: string = 'User';
   export let handshakeCountdowns: Record<string, number> = {};
   export let language: 'en' | 'de' = 'en';
   
@@ -25,13 +28,13 @@
   let newFriendName = '';
   
   function handleAddFriend() {
-    if (!newFriendPeerId.trim() || !newFriendName.trim()) {
-      dispatch('notification', translations[language].invalidPeerId);
+    if (!newFriendName.trim()) {
+      dispatch('notification', 'Please enter a friend name');
       return;
     }
     
     dispatch('addFriend', {
-      peerId: newFriendPeerId.trim(),
+      peerId: newFriendPeerId.trim() || undefined,
       displayName: newFriendName.trim()
     });
     
@@ -41,18 +44,21 @@
     showAddFriend = false;
   }
   
-  function handleRemoveFriend(peerId: string) {
+  function handleRemoveFriend(friend: Friend) {
+    const id = friend.peerId || friend.displayName;
     if (confirm(translations[language].removeFriend + '?')) {
-      dispatch('removeFriend', peerId);
+      dispatch('removeFriend', id);
     }
   }
   
-  function handleSelectFriend(peerId: string) {
-    dispatch('selectFriend', peerId);
+  function handleSelectFriend(friend: Friend) {
+    // Use peerId if available, otherwise use displayName
+    const id = friend.peerId || friend.displayName;
+    dispatch('selectFriend', id);
   }
   
   function copyMyPeerId() {
-    navigator.clipboard.writeText(myPeerId);
+    navigator.clipboard.writeText(profileId);
     dispatch('notification', translations[language].peerIdCopied);
   }
   
@@ -63,24 +69,24 @@
   <div class="my-info">
     <div class="my-name">{myUsername}</div>
     <button class="peer-id" on:click={copyMyPeerId} title="Click to copy">
-      {myPeerId.slice(0, 8)}...
+      {profileId.slice(0, 8)}...
     </button>
   </div>
   
   <div class="friends">
-    {#each friends as friend (friend.peerId)}
+    {#each friends as friend (friend.displayName)}
       <div
         class="friend"
-        class:selected={selectedFriendId === friend.peerId}
+        class:selected={selectedFriendId === friend.peerId || selectedFriendId === friend.displayName}
         class:disconnected={!friend.isConnected}
-        on:click={() => handleSelectFriend(friend.peerId)}
+        on:click={() => handleSelectFriend(friend)}
         role="button"
         tabindex="0"
-        on:keydown={(e) => e.key === 'Enter' && handleSelectFriend(friend.peerId)}
+        on:keydown={(e) => e.key === 'Enter' && handleSelectFriend(friend)}
       >
         <div class="friend-info">
           <div class="friend-name">{friend.displayName}</div>
-          {#if handshakeCountdowns[friend.peerId] !== undefined}
+          {#if friend.peerId && handshakeCountdowns[friend.peerId] !== undefined}
             <div class="countdown">{handshakeCountdowns[friend.peerId]}s</div>
           {/if}
         </div>
@@ -94,7 +100,7 @@
             class="remove-friend"
             on:click={(e) => {
               e.stopPropagation();
-              handleRemoveFriend(friend.peerId);
+              handleRemoveFriend(friend);
             }}
             title={t.removeFriend}
           >
@@ -110,13 +116,13 @@
       <div class="add-friend-form">
         <input
           type="text"
-          bind:value={newFriendPeerId}
-          placeholder={t.enterPeerId}
+          bind:value={newFriendName}
+          placeholder={t.enterFriendName}
         />
         <input
           type="text"
-          bind:value={newFriendName}
-          placeholder={t.enterFriendName}
+          bind:value={newFriendPeerId}
+          placeholder={t.enterPeerId + ' (optional)'}
         />
         <div class="form-buttons">
           <button
@@ -128,7 +134,7 @@
           <button
             class="confirm"
             on:click={handleAddFriend}
-            disabled={!newFriendPeerId.trim() || !newFriendName.trim()}
+            disabled={!newFriendName.trim()}
           >
             ✓
           </button>

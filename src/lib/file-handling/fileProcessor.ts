@@ -133,7 +133,8 @@ export function downloadAttachment(attachment: FileAttachment): void {
     return;
   }
   
-  const blob = base64ToBlob(attachment.data, attachment.mimeType);
+  const mimeType = attachment.mimeType || 'application/octet-stream';
+  const blob = base64ToBlob(attachment.data, mimeType);
   const url = URL.createObjectURL(blob);
   
   const a = document.createElement('a');
