@@ -492,11 +492,11 @@
           console.log('✅ Successfully loaded account package:', accountPackage);
           
           // Check version and migrate if needed
-          if (!accountPackage.version || accountPackage.version < 1) {
-            console.log('🔄 Migrating account package to version 1');
+          if (!accountPackage.version || accountPackage.version < 2) {
+            console.log(`🔄 Migrating account package from version ${accountPackage.version || 0} to version 2`);
             // Remove all friends as they need to be recreated with new scratchpad approach
             accountPackage.friends = [];
-            accountPackage.version = 1;
+            accountPackage.version = 2;
             showNotification('Account package upgraded. Please re-add your friends.');
           }
           
@@ -714,7 +714,7 @@
     sessionStartTimestamp = Date.now();
     
     const accountData: AccountPackage = {
-      version: 1, // Version 1 of the account package format
+      version: 2, // Version 2 of the account package format
       username: accountCreationForm.username.trim(),
       profileImage: accountCreationForm.profileImage.trim() || undefined,
       themeUrl: accountCreationForm.themeUrl.trim() || 'default',
