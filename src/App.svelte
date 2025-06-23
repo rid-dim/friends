@@ -67,10 +67,14 @@
   // Connection management
   let connectionManager: ConnectionManager;
   let handshakeServerUrl = 'https://handshake.autonomi.space';
-  let handshakeIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   let handshakeStatus = '';
   let handshakeCountdown = '';
-  let handshakeCountdowns: Record<string, number> = {};
+  let handshakeCountdowns: Record<string, number | {
+    text: string;
+    dots?: string;
+    seconds?: number;
+    isConnecting: boolean;
+  }> = {};
   let handshakeLoopRunning = false;
   
   // UI state
@@ -134,7 +138,6 @@
     return () => {
       // Cleanup
       connectionManager.closeAllConnections();
-      handshakeIntervals.forEach(interval => clearInterval(interval));
       handshakeLoopRunning = false;
       
       // Stop session monitoring
@@ -215,9 +218,13 @@
           chunk = scratchpadData;
         }
         
-        if (chunk && chunk.scratchpad_address) {
-          console.log('✅ Found existing friend scratchpad:', chunk.scratchpad_address);
-          return chunk.scratchpad_address;
+        // Prüfe beide möglichen Felder: scratchpad_address oder network_address
+        if (chunk) {
+          const address = chunk.scratchpad_address || chunk.network_address;
+          if (address) {
+            console.log('✅ Found existing friend scratchpad:', address);
+            return address;
+          }
         }
       } else if (response.status === 404) {
         // Create new scratchpad
@@ -235,7 +242,7 @@
           counter: 0,
           data_encoding: 0,
           dweb_type: "PublicScratchpad",
-          encryped_data: [0],
+          encrypted_data: [0],
           scratchpad_address: "string",
           unencrypted_data: friendInfoBytes
         };
@@ -254,10 +261,15 @@
         }
         
         const createdScratchpad = await createResponse.json();
+        console.log('📦 Server response for scratchpad creation:', createdScratchpad);
         
-        if (createdScratchpad && createdScratchpad.scratchpad_address) {
-          console.log('✅ Created new friend scratchpad:', createdScratchpad.scratchpad_address);
-          return createdScratchpad.scratchpad_address;
+        // Prüfe beide möglichen Felder: scratchpad_address oder network_address
+        if (createdScratchpad) {
+          const address = createdScratchpad.scratchpad_address || createdScratchpad.network_address;
+          if (address) {
+            console.log('✅ Created new friend scratchpad:', address);
+            return address;
+          }
         }
       }
       
@@ -370,8 +382,6 @@
     
     // Stop handshake loop
     handshakeLoopRunning = false;
-    handshakeIntervals.forEach(interval => clearInterval(interval));
-    handshakeIntervals.clear();
     
     // Update UI
     connectionStatus = t.sessionTransferred;
@@ -534,7 +544,7 @@
         counter: 0,
         data_encoding: 0,
         dweb_type: "PrivateScratchpad",
-        encryped_data: [0],
+        encrypted_data: [0],
         scratchpad_address: "string",
         unencrypted_data: accountBytes
       };
@@ -580,7 +590,7 @@
         counter: 0,
         data_encoding: 0,
         dweb_type: "PrivateScratchpad",
-        encryped_data: [0],
+        encrypted_data: [0],
         scratchpad_address: "string",
         unencrypted_data: accountBytes
       };
@@ -634,9 +644,13 @@
           chunk = scratchpadData;
         }
         
-        if (chunk && chunk.scratchpad_address) {
-                  profileId = chunk.scratchpad_address;
-        console.log('✅ Retrieved profile ID:', profileId);
+        // Prüfe beide möglichen Felder: scratchpad_address oder network_address
+        if (chunk) {
+          const address = chunk.scratchpad_address || chunk.network_address;
+          if (address) {
+            profileId = address;
+            console.log('✅ Retrieved profile ID:', profileId);
+          }
         }
       } else if (response.status === 404) {
         // Create new public scratchpad
@@ -670,7 +684,7 @@
         counter: 0,
         data_encoding: 0,
         dweb_type: "PublicScratchpad",
-        encryped_data: [0],
+        encrypted_data: [0],
         scratchpad_address: "string",
         unencrypted_data: peerInfoBytes
       };
@@ -689,10 +703,15 @@
       }
       
       const createdScratchpad = await response.json();
+      console.log('📦 Server response for public scratchpad creation:', createdScratchpad);
       
-      if (createdScratchpad && createdScratchpad.scratchpad_address) {
-        profileId = createdScratchpad.scratchpad_address;
-        console.log('✅ New profile ID:', profileId);
+      // Prüfe beide möglichen Felder: scratchpad_address oder network_address
+      if (createdScratchpad) {
+        const address = createdScratchpad.scratchpad_address || createdScratchpad.network_address;
+        if (address) {
+          profileId = address;
+          console.log('✅ New profile ID:', profileId);
+        }
       }
     } catch (error) {
       console.error('❌ Error creating public scratchpad:', error);
@@ -884,25 +903,14 @@
       console.log(`[${peerId}] Connected!`);
       showNotification(`Connected to ${getFriendName(peerId)}`);
       
-      // Stop auto-reconnect for this specific friend - connection established
-      const interval = handshakeIntervals.get(peerId);
-      if (interval) {
-        clearInterval(interval);
-        handshakeIntervals.delete(peerId);
-        console.log(`[${peerId}] Stopping auto-reconnect - connection established`);
-      }
-      
       // Clear countdown for this friend
       delete handshakeCountdowns[peerId];
     } else if (state === 'failed' || state === 'disconnected') {
       console.log(`[${peerId}] Disconnected`);
       showNotification(`Disconnected from ${getFriendName(peerId)}`);
       
-      // Restart auto-reconnect for this specific friend - connection lost
-      if (!handshakeIntervals.has(peerId)) {
-        console.log(`[${peerId}] Starting auto-reconnect - connection lost`);
-        startAutoReconnectForFriend(peerId);
-      }
+      // Initialize status display for this friend again
+      startAutoReconnectForFriend(peerId);
     }
     
     // Update debug info
@@ -1047,12 +1055,8 @@
     if (friend.peerId) {
       connectionManager.closeConnection(friend.peerId);
       
-      // Stop auto-reconnect for this friend
-      const interval = handshakeIntervals.get(friend.peerId);
-      if (interval) {
-        clearInterval(interval);
-        handshakeIntervals.delete(friend.peerId);
-      }
+      // Clear status display for this friend
+      delete handshakeCountdowns[friend.peerId];
       
       // Clear chat messages
       delete chatMessages[friend.peerId];
@@ -1401,92 +1405,93 @@
     }
   }
   
-  // Update countdowns for each friend
+  // Update status display for each friend
+  let dotCount = 0;
+  let dotUpdateCounter = 0;
+  
   function updateCountdowns() {
-    handshakeIntervals.forEach((interval, peerId) => {
-      // Assuming interval is set to 60 seconds, we can't get the exact time left
-      // But we can approximate based on when it was started
-      if (!handshakeCountdowns[peerId]) {
-        handshakeCountdowns[peerId] = 60;
+    // Update dot animation counter (changes every 500ms)
+    dotUpdateCounter = (dotUpdateCounter + 1) % 2;
+    if (dotUpdateCounter === 0) {
+      dotCount = (dotCount + 1) % 3;
+    }
+    
+    // Get current time to determine if we're in the connecting phase
+    const now = new Date();
+    const seconds = now.getSeconds();
+    const isConnectingPhase = seconds < 35; // First 35 seconds after full minute
+    
+    // Update status for all disconnected friends
+    friends.forEach(friend => {
+      if (!friend.peerId || friend.isConnected) {
+        return; // Skip connected friends or those without peerId
+      }
+      
+      // Format the status display
+      if (isConnectingPhase) {
+        // In connecting phase, show "connecting" with animated dots
+        const dots = '.'.repeat(dotCount + 1);
+        handshakeCountdowns[friend.peerId] = { 
+          text: 'connecting',
+          dots: dots,
+          isConnecting: true
+        };
       } else {
-        handshakeCountdowns[peerId] = Math.max(0, handshakeCountdowns[peerId] - 1);
-        if (handshakeCountdowns[peerId] === 0) {
-          handshakeCountdowns[peerId] = 60; // Reset after reaching 0
-        }
+        // After connecting phase, show countdown to next attempt
+        const timeToNextMinute = 60 - seconds;
+        handshakeCountdowns[friend.peerId] = {
+          text: 'retrying in',
+          seconds: timeToNextMinute,
+          isConnecting: false
+        };
       }
     });
+    
+    // Trigger Svelte reactivity by reassigning the object
+    handshakeCountdowns = { ...handshakeCountdowns };
   }
   
-  // Start handshake loop for continuous connection attempts
+  // Start display loop for connection status
   async function startHandshakeLoop() {
     if (handshakeLoopRunning) return;
     handshakeLoopRunning = true;
     
+    // Start the countdown update interval
+    const intervalId = setInterval(updateCountdowns, 500);
+    
     while (handshakeLoopRunning) {
       // Check if all friends are connected
-      const disconnectedFriends = friends.filter(f => !f.isConnected);
+      const disconnectedFriends = friends.filter(f => !f.isConnected && f.peerId);
       if (disconnectedFriends.length === 0) {
         // All friends are connected, stop the loop
         handshakeLoopRunning = false;
-        console.log('All friends connected, stopping handshake loop');
+        clearInterval(intervalId);
+        console.log('All friends connected, stopping status display loop');
         break;
       }
       
-      // Get current time
+      // Try to connect to disconnected friends at the start of each minute
       const now = new Date();
       const seconds = now.getSeconds();
-      const milliseconds = now.getMilliseconds();
       
-      // Check if we're close to a full minute (within 0.5s)
-      const isCloseToFullMinute = seconds === 0 && milliseconds < 500;
-      // Check if we're close to 3 seconds after full minute (within 0.5s)
-      const isCloseToThreeSecondsAfter = seconds === 3 && milliseconds < 500;
-      
-      for (const friend of disconnectedFriends) {
-        const peerId = friend.peerId;
-        
-        // Skip friends without peerId or scratchpad address
-        if (!peerId || !friend.scratchpadAddress) {
-          continue;
-        }
-        
-        const connection = connectionManager.getConnection(peerId);
-        
-        if (connection && (connection.isConnected || connection.isConnecting)) {
-          continue; // Skip friends who are already connected or connecting
-        }
-        
-        // Determine priority based on contact ID comparison (friend-specific)
-        const isHighPriority = calculateFriendPriority(friend);
-        
-        // Calculate time until next attempt
-        let nextAttemptSeconds;
-        if (isHighPriority) {
-          nextAttemptSeconds = seconds === 0 ? 60 : 60 - seconds;
-        } else {
-          nextAttemptSeconds = seconds <= 3 ? 3 - seconds : 63 - seconds;
-        }
-        handshakeCountdowns[peerId] = nextAttemptSeconds;
-        
-        if (isHighPriority && isCloseToFullMinute) {
-          // High priority: Create and post offer at full minute
-          console.log(`[${peerId}] Close to full minute, creating offer`);
-          startHandshakeForFriend(peerId);
-        } else if (!isHighPriority && isCloseToThreeSecondsAfter) {
-          // Low priority: Check for offer and post answer at 3 seconds after full minute
-          console.log(`[${peerId}] Close to 3s after full minute, checking for offer`);
-          startHandshakeForFriend(peerId);
-        }
+      if (seconds === 0) {
+        console.log('⏰ Full minute reached, attempting connections to disconnected friends');
+        disconnectedFriends.forEach(friend => {
+          if (friend.peerId && canStartHandshake(friend.peerId)) {
+            console.log(`[${friend.peerId}] Attempting connection at ${now.toISOString()}`);
+            startHandshakeForFriend(friend.peerId);
+          }
+        });
       }
       
-      // Sleep for 0.5s before next check
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Sleep for 1s before next check
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
   
-  // Start auto-reconnect for all friends
+  // Initialize status display and connections for all friends
   function startAutoReconnect() {
-    // Only start auto-reconnect for disconnected friends
+    // Only initialize status for disconnected friends
     friends.forEach(friend => {
       // If friend is already connected, don't interfere
       if (friend.isConnected) {
@@ -1498,8 +1503,8 @@
         return;
       }
       
-      // Initialize countdown
-      handshakeCountdowns[friend.peerId] = 60;
+      // Use the startAutoReconnectForFriend function to ensure consistency
+      startAutoReconnectForFriend(friend.peerId);
     });
     
     // Start the handshake loop if not already running
@@ -1508,24 +1513,20 @@
     }
   }
   
-  // Start auto-reconnect for a specific friend
+  // Initialize status display and connection for a specific friend
   function startAutoReconnectForFriend(peerId: string) {
-    // Clear existing interval for this friend if it exists
-    const existingInterval = handshakeIntervals.get(peerId);
-    if (existingInterval) {
-      clearInterval(existingInterval);
-      handshakeIntervals.delete(peerId);
-    }
-    
     // Check current connection state
     const connection = connectionManager.getConnection(peerId);
     if (connection && connection.isConnected) {
-      console.log(`[${peerId}] Already connected, skipping auto-reconnect`);
+      console.log(`[${peerId}] Already connected, not showing status`);
       return;
     }
     
-    // Initialize countdown
-    handshakeCountdowns[peerId] = 60;
+    // Initialize status display
+    console.log(`[${peerId}] Initializing connection status display`);
+    
+    // Start the connection attempt
+    startHandshakeForFriend(peerId);
     
     // Start the handshake loop if not already running
     if (!handshakeLoopRunning) {

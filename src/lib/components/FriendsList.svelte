@@ -18,7 +18,12 @@
   export let selectedFriendId: string | null = null;
   export let profileId: string = '';
   export let myUsername: string = 'User';
-  export let handshakeCountdowns: Record<string, number> = {};
+  export let handshakeCountdowns: Record<string, number | {
+    text: string;
+    dots?: string;
+    seconds?: number;
+    isConnecting: boolean;
+  }> = {};
   export let language: 'en' | 'de' = 'en';
   
   const dispatch = createEventDispatcher();
@@ -88,8 +93,20 @@
       >
         <div class="friend-info">
           <div class="friend-name">{friend.displayName}</div>
-          {#if friend.peerId && handshakeCountdowns[friend.peerId] !== undefined}
-            <div class="countdown">{handshakeCountdowns[friend.peerId]}s</div>
+          {#if friend.peerId && !friend.isConnected && handshakeCountdowns[friend.peerId] !== undefined}
+            <div class="countdown">
+              {#if typeof handshakeCountdowns[friend.peerId] === 'number'}
+                {handshakeCountdowns[friend.peerId]}s
+              {:else if typeof handshakeCountdowns[friend.peerId] === 'object'}
+                {#if (handshakeCountdowns[friend.peerId] as any).isConnecting}
+                  <span class="connecting-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
+                  <span class="connecting-dots">{(handshakeCountdowns[friend.peerId] as any).dots}</span>
+                {:else}
+                  <span class="retry-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
+                  <span class="retry-seconds">{(handshakeCountdowns[friend.peerId] as any).seconds}s</span>
+                {/if}
+              {/if}
+            </div>
           {/if}
         </div>
         
@@ -220,12 +237,10 @@
   }
   
   .friend.disconnected {
-    opacity: 0.7;
+    opacity: 0.9;
   }
   
-  .friend.disconnected .friend-name {
-    color: var(--foreground-color2);
-  }
+  /* Entfernen der grauen Farbe für den Namen, damit er immer gut lesbar ist */
   
   .friend-info {
     display: flex;
@@ -239,8 +254,28 @@
   
   .countdown {
     font-size: 0.8rem;
-    opacity: 0.7;
+    opacity: 1;
     font-family: monospace;
+    display: flex;
+    gap: 0.25rem;
+    color: var(--notification-color); /* Einheitliche Farbe für alle Status-Texte */
+  }
+  
+  .connecting-text {
+    color: var(--notification-color);
+  }
+  
+  .connecting-dots {
+    min-width: 1.5rem;
+    color: var(--notification-color);
+  }
+  
+  .retry-text {
+    color: var(--notification-color); /* Jetzt auch in Blau statt Grau */
+  }
+  
+  .retry-seconds {
+    color: var(--notification-color);
   }
   
   .friend-status {
