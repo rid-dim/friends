@@ -1470,20 +1470,6 @@
         break;
       }
       
-      // Try to connect to disconnected friends at the start of each minute
-      const now = new Date();
-      const seconds = now.getSeconds();
-      
-      if (seconds === 0) {
-        console.log('⏰ Full minute reached, attempting connections to disconnected friends');
-        disconnectedFriends.forEach(friend => {
-          if (friend.peerId && canStartHandshake(friend.peerId)) {
-            console.log(`[${friend.peerId}] Attempting connection at ${now.toISOString()}`);
-            startHandshakeForFriend(friend.peerId);
-          }
-        });
-      }
-      
       // Sleep for 1s before next check
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
@@ -1491,7 +1477,7 @@
   
   // Initialize status display and connections for all friends
   function startAutoReconnect() {
-    // Only initialize status for disconnected friends
+    // Only initialize status for disconnected friends with peerId
     friends.forEach(friend => {
       // If friend is already connected, don't interfere
       if (friend.isConnected) {
@@ -1503,8 +1489,8 @@
         return;
       }
       
-      // Use the startAutoReconnectForFriend function to ensure consistency
-      startAutoReconnectForFriend(friend.peerId);
+      // Initialize connection for this friend
+      startHandshakeForFriend(friend.peerId);
     });
     
     // Start the handshake loop if not already running
@@ -1543,14 +1529,6 @@
     if (existingConnection && (existingConnection.isConnecting || existingConnection.isConnected)) {
       console.log(`[${peerId}] Connection already ${existingConnection.isConnected ? 'established' : 'in progress'}`);
       return;
-    }
-    
-    // Close any existing failed connection before creating a new one
-    if (existingConnection) {
-      console.log(`[${peerId}] Closing existing connection before creating new one`);
-      connectionManager.closeConnection(peerId);
-      // Wait a bit for cleanup
-      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
     try {
