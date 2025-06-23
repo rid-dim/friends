@@ -101,7 +101,7 @@
     const rtcConfig: RTCConfiguration = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun1.l.google.com:19302' }
       ]
     };
     connectionManager = new ConnectionManager({
@@ -128,7 +128,7 @@
     // Start countdown updates
     setInterval(updateCountdowns, 1000);
     
-    // Start handshake loop
+    // Start handshake loop with smokesigns integration
     startHandshakeLoop();
     
     return () => {
@@ -405,6 +405,13 @@
             isConnected: false,
             unreadCount: 0
           }));
+          
+          // Automatically select first friend if there are any
+          if (friends.length > 0) {
+            console.log('🔍 Automatically selecting first friend:', friends[0].displayName);
+            // Use peerId if available, otherwise use displayName
+            selectedFriendId = friends[0].peerId || friends[0].displayName;
+          }
         }
         
         // Load theme if available
@@ -975,7 +982,8 @@
     
     friends = [...friends, newFriend];
     
-    // Select the new friend to show the loading state
+    // Always select the new friend to show the loading state
+    // and to make it easier for users to interact with the new friend
     selectedFriendId = peerId || displayName;
     
     // Save to localStorage immediately (without scratchpad address)
@@ -1055,7 +1063,13 @@
     
     // Clear selection if this friend was selected
     if (selectedFriendId === id) {
-      selectedFriendId = null;
+      // If there are other friends, select the first one
+      if (friends.length > 0) {
+        console.log('🔍 Auto-selecting another friend after removal');
+        selectedFriendId = friends[0].peerId || friends[0].displayName;
+      } else {
+        selectedFriendId = null;
+      }
     }
     
     // Save to localStorage
@@ -1519,7 +1533,7 @@
     }
   }
   
-  // Start handshake process for a specific friend
+  // Start handshake for a specific friend
   async function startHandshakeForFriend(peerId: string) {
     if (!profileId || !peerId) return;
     
@@ -1538,12 +1552,6 @@
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    // Small delay to ensure clean state
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    const connection = connectionManager.createConnection(peerId);
-    console.log(`[${peerId}] Created new connection`);
-
     try {
       // Find the friend to get their scratchpad address
       const friend = friends.find(f => f.peerId === peerId);
@@ -1555,20 +1563,24 @@
       // Determine priority based on contact ID comparison (friend-specific)
       const isHighPriority = calculateFriendPriority(friend);
       
-      console.log(`[${peerId}] Handshake role: ${isHighPriority ? 'Initiator (create offer)' : 'Responder (wait for offer)'}`);
-      console.log(`[${peerId}] Using friend-specific priority based on contact IDs`);
-      
-      if (isHighPriority) {
-        // Create and post offer to MY handshake server location
-        const offer = await connection.createOffer();
-        await postHandshake(peerId, 'offer', offer);
-        
-        // Wait for answer from peer's handshake data
-        pollForHandshake(peerId, 'answer');
-      } else {
-        // Wait for offer from peer's handshake data
-        pollForHandshake(peerId, 'offer');
+      // Ensure we have valid addresses (non-undefined)
+      const myAddress = friend.scratchpadAddress;
+      if (!myAddress) {
+        console.error(`[${peerId}] Missing my scratchpad address for connection`);
+        return;
       }
+      
+      console.log(`[${peerId}] Using smokesigns for connection with priority: ${isHighPriority ? 'true (initiator)' : 'false (responder)'}`);
+      console.log(`[${peerId}] Using addresses: read=${peerId}, write=${myAddress}`);
+      
+      // Create new connection using smokesigns integration
+      connectionManager.createConnectionUsingSigns(
+        peerId,
+        myAddress,  // My address (write to)
+        peerId,     // Their address (read from)
+        isHighPriority // Priority based on ID comparison
+      );
+      
     } catch (error) {
       console.error(`[${peerId}] Handshake failed:`, error);
       updateFriendConnectionStatus(peerId, false);
@@ -1579,228 +1591,6 @@
   function validateHandshakeAddress(contactId: string): boolean {
     const hexPattern = /^[a-f0-9]{96}$/;
     return hexPattern.test(contactId);
-  }
-
-  // Post handshake data to server using contact IDs directly
-  async function postHandshake(peerId: string, type: 'offer' | 'answer', data: RTCSessionDescriptionInit) {
-    try {
-      // Find the friend to get their contact information
-      const friend = friends.find(f => f.peerId === peerId);
-      if (!friend || !friend.scratchpadAddress) {
-        throw new Error(`No friend found or no contact ID for ${peerId}`);
-      }
-      
-      // Use contact IDs directly as the address
-      // Always write to my contact ID - the partner will read from there
-      const myContactId = friend.scratchpadAddress; // This is my contact ID for this friend
-      const theirPeerId = peerId; // This is their peer ID (their contact ID for me)
-      
-      // Validate contact ID format
-      if (!validateHandshakeAddress(myContactId)) {
-        console.error(`[${peerId}] Invalid contact ID format: ${myContactId}`);
-        console.error(`[${peerId}] Expected 96-character hex string, got: ${myContactId.length} characters`);
-        throw new Error(`Invalid contact ID format for handshake server`);
-      }
-      
-      const handshakeAddress = myContactId; // Use contact ID directly
-      
-      // The handshake data structure with timestamp
-      const handshakeData = {
-        from: myContactId,
-        to: theirPeerId,
-        type: type,
-        timestamp: new Date().toISOString(),
-        data: JSON.stringify(data)
-      };
-      
-      // Convert to binary data
-      const handshakeJson = JSON.stringify(handshakeData);
-      const encoder = new TextEncoder();
-      const handshakeBytes = encoder.encode(handshakeJson);
-      
-      // PUT to external handshake server
-      const response = await fetch(`${handshakeServerUrl}/${handshakeAddress}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-        },
-        body: handshakeBytes
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to post ${type}: ${response.statusText}`);
-      }
-      
-      console.log(`[${peerId}] Posted ${type} to handshake server at address: ${handshakeAddress.slice(0,16)}...`);
-      console.log(`[${peerId}] ${type} SDP preview:`, JSON.stringify(data).substring(0, 200) + '...');
-    } catch (error) {
-      console.error(`[${peerId}] Error posting ${type}:`, error);
-    }
-  }
-
-  // Get handshake data from server
-  async function getHandshakeData(peerId: string, expectedType: 'offer' | 'answer'): Promise<any> {
-    try {
-      // Find the friend to get contact information
-      const friend = friends.find(f => f.peerId === peerId);
-      if (!friend || !friend.scratchpadAddress) {
-        throw new Error(`No friend found or no contact ID for ${peerId}`);
-      }
-      
-      const myContactId = friend.scratchpadAddress;
-      const theirPeerId = peerId; // This is their peer ID (their contact ID for me)
-      
-      // Validate their peer ID format
-      if (!validateHandshakeAddress(theirPeerId)) {
-        console.error(`[${peerId}] Invalid peer ID format: ${theirPeerId}`);
-        console.error(`[${peerId}] Expected 96-character hex string, got: ${theirPeerId.length} characters`);
-        throw new Error(`Invalid peer ID format for handshake server`);
-      }
-      
-      // Always read from their peer ID - they write to their contact ID
-      const handshakeAddress = theirPeerId;
-      
-      // GET from external handshake server
-      const response = await fetch(`${handshakeServerUrl}/${handshakeAddress}`, {
-        method: 'GET'
-      });
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null; // No data yet
-        }
-        throw new Error(`Failed to get ${expectedType}: ${response.statusText}`);
-      }
-      
-      // Get binary data and decode
-      const responseBody = await response.arrayBuffer();
-      if (responseBody.byteLength === 0) {
-        return null; // No data yet
-      }
-      
-      const decoder = new TextDecoder();
-      const handshakeJson = decoder.decode(responseBody);
-      const handshakeData = JSON.parse(handshakeJson);
-      
-      // Check if data is recent (less than 30 seconds old)
-      const timestamp = new Date(handshakeData.timestamp);
-      const age = Date.now() - timestamp.getTime();
-      if (age > 30000) { // 30 seconds
-        console.log(`[${peerId}] Ignoring old ${expectedType} (${Math.round(age/1000)}s old)`);
-        return null;
-      }
-      
-      // Verify this is the expected type and it's for us
-      if (handshakeData.type !== expectedType) {
-        console.log(`[${peerId}] Expected ${expectedType} but got ${handshakeData.type}`);
-        return null;
-      }
-      
-      if (handshakeData.to !== myContactId) {
-        console.log(`[${peerId}] Message is for ${handshakeData.to}, not for us (${myContactId})`);
-        return null;
-      }
-      
-      if (handshakeData.from !== theirPeerId) {
-        console.log(`[${peerId}] Message is from ${handshakeData.from}, not from expected peer (${theirPeerId})`);
-        return null;
-      }
-      
-      return {
-        data: JSON.parse(handshakeData.data),
-        timestamp: handshakeData.timestamp
-      };
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('404')) {
-        return null; // No data yet
-      }
-      console.error(`[${peerId}] Error getting ${expectedType}:`, error);
-      return null;
-    }
-  }
-
-  // Poll for handshake data from server
-  async function pollForHandshake(peerId: string, expectedType: 'offer' | 'answer') {
-    const maxAttempts = 30; // 30 seconds timeout
-    let attempts = 0;
-    let lastProcessedTimestamp = '';
-    
-    const pollInterval = setInterval(async () => {
-      if (attempts++ > maxAttempts) {
-        clearInterval(pollInterval);
-        console.log(`[${peerId}] Handshake timeout waiting for ${expectedType}`);
-        updateFriendConnectionStatus(peerId, false);
-        return;
-      }
-      
-      try {
-        // GET handshake data from external server
-        const result = await getHandshakeData(peerId, expectedType);
-        
-        if (!result) {
-          return; // No data yet
-        }
-        
-        // Check if we've already processed this (avoid duplicates)
-        if (result.timestamp === lastProcessedTimestamp) {
-          return;
-        }
-        
-        clearInterval(pollInterval);
-        lastProcessedTimestamp = result.timestamp;
-        
-        const connection = connectionManager.getConnection(peerId);
-        
-        if (!connection) {
-          console.error(`[${peerId}] No connection found for handshake`);
-          return;
-        }
-        
-        if (expectedType === 'offer') {
-          // We received an offer, create and send answer
-          console.log(`[${peerId}] Received offer, SDP preview:`, JSON.stringify(result.data).substring(0, 200) + '...');
-          const answer = await connection.createAnswer(result.data);
-          await postHandshake(peerId, 'answer', answer);
-          console.log(`[${peerId}] Created and sent answer`);
-          
-          // No separate ICE candidates needed - they're in the SDP
-          console.log(`[${peerId}] Using integrated ICE candidates in SDP (no separate messages)`);
-        } else if (expectedType === 'answer') {
-          // We received an answer, set it as remote description
-          console.log(`[${peerId}] Received answer, SDP preview:`, JSON.stringify(result.data).substring(0, 200) + '...');
-          await connection.setRemoteAnswer(result.data);
-          console.log(`[${peerId}] Set answer as remote description`);
-          
-          // Debug: Check connection state after setting answer
-          setTimeout(() => {
-            const conn = connectionManager.getConnection(peerId);
-            if (conn) {
-              console.log(`[${peerId}] Post-answer connection check:`);
-              console.log(`[${peerId}] - Connection state: ${conn.connection.connectionState}`);
-              console.log(`[${peerId}] - ICE connection state: ${conn.connection.iceConnectionState}`);
-              console.log(`[${peerId}] - ICE gathering state: ${conn.connection.iceGatheringState}`);
-              console.log(`[${peerId}] - Signaling state: ${conn.connection.signalingState}`);
-              
-              // Check if we have any ICE candidates in SDP
-              const localDesc = conn.connection.localDescription;
-              const remoteDesc = conn.connection.remoteDescription;
-              
-              if (localDesc) {
-                const localCandidates = localDesc.sdp.split('\n').filter(line => line.includes('a=candidate'));
-                console.log(`[${peerId}] - Local SDP candidates: ${localCandidates.length}`);
-              }
-              
-              if (remoteDesc) {
-                const remoteCandidates = remoteDesc.sdp.split('\n').filter(line => line.includes('a=candidate'));
-                console.log(`[${peerId}] - Remote SDP candidates: ${remoteCandidates.length}`);
-              }
-            }
-          }, 2000);
-        }
-      } catch (error) {
-        console.error(`[${peerId}] Poll error:`, error);
-      }
-    }, 1000);
   }
 
   // Check if we have the necessary data to start a handshake

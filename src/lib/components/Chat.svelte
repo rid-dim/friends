@@ -269,7 +269,8 @@
   }
   
   .friend-peer-id .label {
-    opacity: 0.7;
+    color: var(--text-color);
+    opacity: 1;
   }
   
   .friend-peer-id .peer-id {
@@ -459,7 +460,8 @@
   }
   
   .friend-contact-id .label {
-    opacity: 0.7;
+    color: var(--text-color);
+    opacity: 1;
   }
   
   .friend-contact-id .peer-id {

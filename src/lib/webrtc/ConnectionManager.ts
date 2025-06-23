@@ -1,10 +1,242 @@
 // WebRTC Connection Manager for multiple peer connections
 import type { FileAttachment } from '../file-handling/types';
+import { Link, HandshakeserverConnector } from 'smokesigns';
+import type { ReadWriteInterface } from 'smokesigns';
 
 export interface ConnectionEvents {
   onMessage: (peerId: string, data: any) => void;
   onConnectionStateChange: (peerId: string, state: RTCPeerConnectionState) => void;
   onError: (peerId: string, error: Error) => void;
+}
+
+// Common interface for both connection types
+interface ConnectionInterface {
+  peerId: string;
+  isConnected: boolean;
+  isConnecting: boolean;
+  sendMessage(data: any): void;
+  sendLargeFileInChunks(messageData: any, attachment: FileAttachment): void;
+  close(): void;
+}
+
+/**
+ * SinglePeerConnection using smokesigns library
+ * This replaces the old PeerConnection implementation using smokesigns Link
+ */
+export class SinglePeerConnection {
+  peerId: string;
+  private events: ConnectionEvents;
+  private link: Link | null = null;
+  dataChannel: RTCDataChannel | null = null;
+  isConnected: boolean = false;
+  isConnecting: boolean = false;
+  private messageQueue: any[] = [];
+  private fileTransfers: Map<string, { 
+    chunks: string[],
+    totalChunks: number,
+    chunkSize: number,
+    attachment: FileAttachment
+  }> = new Map();
+
+  constructor(peerId: string, events: ConnectionEvents, 
+    myAddress: string, peerAddress: string, priority: boolean) {
+    this.peerId = peerId;
+    this.events = events;
+    
+    console.log(`[${this.peerId}] Creating smokesigns Link with addresses:`, { 
+      readAddress: peerAddress,
+      writeAddress: myAddress,
+      priority
+    });
+    
+    // Create smokesigns link
+    this.setupLink(myAddress, peerAddress, priority);
+  }
+  
+  private setupLink(myAddress: string, peerAddress: string, priority: boolean): void {
+    try {
+      // Create handshake server connector
+      const connector = new HandshakeserverConnector({
+        serverUrl: 'https://handshake.autonomi.space',
+        readAddress: peerAddress, // Read from peer's address
+        writeAddress: myAddress   // Write to my address
+      });
+
+      console.log(`[${this.peerId}] Creating smokesigns Link with:`, {
+        serverUrl: 'https://handshake.autonomi.space',
+        readAddress: peerAddress.substring(0, 8) + '...',
+        writeAddress: myAddress.substring(0, 8) + '...',
+        priority
+      });
+
+      // Create link
+      this.link = new Link({
+        readWriteInterface: connector,
+        priority: priority,
+        onConnect: () => {
+          console.log(`[${this.peerId}] Link connected`);
+          this.isConnected = true;
+          this.isConnecting = false;
+          this.events.onConnectionStateChange(this.peerId, 'connected');
+          
+          // Process queued messages
+          while (this.messageQueue.length > 0) {
+            const msg = this.messageQueue.shift();
+            if (msg) {
+              this.sendMessage(msg);
+            }
+          }
+        },
+        onClose: () => {
+          console.log(`[${this.peerId}] Link closed`);
+          this.isConnected = false;
+          this.events.onConnectionStateChange(this.peerId, 'disconnected');
+        },
+        onError: (error) => {
+          console.error(`[${this.peerId}] Link error:`, error);
+          this.events.onError(this.peerId, error);
+        },
+        onMessage: (data) => {
+          console.log(`[${this.peerId}] Received message:`, data);
+          this.events.onMessage(this.peerId, data);
+        }
+      });
+      
+      // Start the connection process
+      console.log(`[${this.peerId}] Starting smokesigns connection...`);
+      this.link.connect().catch(error => {
+        console.error(`[${this.peerId}] Failed to start smokesigns connection:`, error);
+        this.events.onError(this.peerId, error);
+      });
+      
+    } catch (error) {
+      console.error(`[${this.peerId}] Error setting up link:`, error);
+      this.events.onError(this.peerId, error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+  
+  private handleFileChunk(data: any): void {
+    // Process file chunk...
+    // (This would be implemented based on the file handling needs)
+    console.log(`[${this.peerId}] Received file chunk:`, data.chunkIndex, 'of', data.totalChunks);
+  }
+  
+  async connect(): Promise<void> {
+    if (!this.link) {
+      console.error(`[${this.peerId}] Cannot connect, Link not initialized`);
+      return;
+    }
+    
+    if (this.isConnected) {
+      console.log(`[${this.peerId}] Already connected`);
+      return;
+    }
+    
+    if (this.isConnecting) {
+      console.log(`[${this.peerId}] Already connecting`);
+      return;
+    }
+    
+    this.isConnecting = true;
+    
+    try {
+      await this.link.connect();
+      console.log(`[${this.peerId}] Connection started`);
+    } catch (error) {
+      console.error(`[${this.peerId}] Connection error:`, error);
+      this.isConnecting = false;
+      this.events.onError(this.peerId, error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+  
+  close(): void {
+    console.log(`[${this.peerId}] Closing SinglePeerConnection`);
+    
+    if (this.link) {
+      this.link.disconnect();
+      this.link = null;
+    }
+    
+    this.isConnected = false;
+    this.isConnecting = false;
+  }
+  
+  sendMessage(data: any): void {
+    if (!this.link) {
+      console.warn(`[${this.peerId}] Cannot send message - no link`);
+      return;
+    }
+    
+    if (!this.isConnected) {
+      console.log(`[${this.peerId}] Queueing message - not connected`);
+      this.messageQueue.push(data);
+      return;
+    }
+    
+    try {
+      this.link.send(data);
+      console.log(`[${this.peerId}] Message sent:`, data.type);
+    } catch (error) {
+      console.error(`[${this.peerId}] Failed to send message:`, error);
+      this.messageQueue.push(data);
+    }
+  }
+  
+  sendLargeFileInChunks(data: any, attachment: FileAttachment): boolean {
+    if (!attachment.data) return false;
+    
+    const chunkSize = 16000; // bytes per chunk
+    const fileData = attachment.data;
+    const totalChunks = Math.ceil(fileData.length / chunkSize);
+    const fileId = `file-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+    
+    console.log(`[${this.peerId}] Sending file in ${totalChunks} chunks, size: ${fileData.length}`);
+    
+    // Send initial message with file information
+    const fileInfo = {
+      type: 'file-start',
+      fileId,
+      timestamp: new Date().toISOString(),
+      nick: data.nick,
+      message: data.message,
+      attachment: {
+        ...attachment,
+        id: fileId,
+        data: undefined,
+        totalChunks
+      }
+    };
+    
+    this.sendMessage(fileInfo);
+    
+    // Send chunks
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, fileData.length);
+      const chunk = fileData.substring(start, end);
+      
+      const chunkData = {
+        type: 'file-chunk',
+        fileId,
+        chunkIndex: i,
+        totalChunks,
+        data: chunk,
+        attachmentId: fileId
+      };
+      
+      // Short delay between chunks to avoid flooding
+      setTimeout(() => {
+        this.sendMessage(chunkData);
+        
+        // Log progress periodically
+        if (i % 10 === 0 || i === totalChunks - 1) {
+          console.log(`[${this.peerId}] Sending chunk ${i+1}/${totalChunks}`);
+        }
+      }, i * 50); // 50ms between chunks
+    }
+    
+    return true;
+  }
 }
 
 export class PeerConnection {
@@ -326,18 +558,11 @@ export class PeerConnection {
     });
   }
   
-  sendMessage(data: any): boolean {
-    if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
-      console.warn(`[${this.peerId}] Cannot send message: data channel not ready`);
-      return false;
-    }
-    
-    try {
+  sendMessage(data: any): void {
+    if (this.dataChannel && this.dataChannel.readyState === 'open') {
       this.dataChannel.send(JSON.stringify(data));
-      return true;
-    } catch (error) {
-      console.error(`[${this.peerId}] Error sending message:`, error);
-      return false;
+    } else {
+      console.warn(`[${this.peerId}] Data channel not open, message not sent`);
     }
   }
   
@@ -461,7 +686,7 @@ export class PeerConnection {
 }
 
 export class ConnectionManager {
-  private connections: Map<string, PeerConnection> = new Map();
+  private connections: Map<string, PeerConnection | SinglePeerConnection> = new Map();
   private rtcConfig: RTCConfiguration;
   private events: ConnectionEvents;
   
@@ -483,8 +708,18 @@ export class ConnectionManager {
     console.log('ConnectionManager initialized with config (mDNS filtering enabled):', this.rtcConfig);
   }
   
-  getConnection(peerId: string): PeerConnection | undefined {
+  getConnection(peerId: string): PeerConnection | SinglePeerConnection | undefined {
     return this.connections.get(peerId);
+  }
+  
+  getConnectedPeers(): string[] {
+    const connectedPeers: string[] = [];
+    this.connections.forEach((connection, peerId) => {
+      if (connection.isConnected) {
+        connectedPeers.push(peerId);
+      }
+    });
+    return connectedPeers;
   }
   
   createConnection(peerId: string): PeerConnection {
@@ -497,6 +732,25 @@ export class ConnectionManager {
     return connection;
   }
   
+  /**
+   * Create a new connection using the smokesigns library
+   */
+  createConnectionUsingSigns(peerId: string, myAddress: string, peerAddress: string, priority: boolean): SinglePeerConnection {
+    // Close existing connection if any
+    this.closeConnection(peerId);
+    
+    const connection = new SinglePeerConnection(
+      peerId, 
+      this.events, 
+      myAddress, 
+      peerAddress,
+      priority
+    );
+    
+    this.connections.set(peerId, connection);
+    return connection;
+  }
+  
   closeConnection(peerId: string) {
     const connection = this.connections.get(peerId);
     if (connection) {
@@ -506,89 +760,31 @@ export class ConnectionManager {
   }
   
   closeAllConnections() {
-    this.connections.forEach(connection => connection.close());
+    this.connections.forEach((connection, peerId) => {
+      connection.close();
+    });
     this.connections.clear();
   }
   
-  getConnectedPeers(): string[] {
-    return Array.from(this.connections.entries())
-      .filter(([_, conn]) => conn.isConnected)
-      .map(([peerId, _]) => peerId);
+  sendMessage(peerId: string, data: any): void {
+    const connection = this.connections.get(peerId);
+    if (connection) {
+      connection.sendMessage(data);
+    } else {
+      console.warn(`No connection found for peer ${peerId}`);
+    }
   }
   
-  sendMessage(peerId: string, data: any): boolean {
+  sendLargeFileInChunks(peerId: string, data: any, attachment: FileAttachment): boolean {
     const connection = this.connections.get(peerId);
     if (!connection) {
       return false;
     }
     
-    return connection.sendMessage(data);
-  }
-  
-  // Send large file in chunks
-  sendLargeFileInChunks(peerId: string, messageData: any, attachment: FileAttachment) {
-    const connection = this.connections.get(peerId);
-    if (!connection || !attachment.data) return;
-    
-    console.log(`[${peerId}] Sending large file in chunks:`, attachment.name);
-    
-    const maxDataPerChunk = 12000;
-    const base64Data = attachment.data;
-    const totalChunks = Math.max(Math.ceil(base64Data.length / maxDataPerChunk), 1);
-    
-    // Send metadata first
-    const metadataMessage = {
-      type: 'file-start',
-      nick: messageData.nick,
-      message: messageData.message,
-      attachment: {
-        ...attachment,
-        data: undefined,
-        totalChunks: totalChunks
-      },
-      timestamp: messageData.timestamp
-    };
-    
-    if (!connection.sendMessage(metadataMessage)) {
-      console.error(`[${peerId}] Failed to send file metadata`);
-      return;
+    if ('sendLargeFileInChunks' in connection) {
+      return connection.sendLargeFileInChunks(data, attachment);
     }
     
-    // Handle empty files
-    if (base64Data.length === 0) {
-      const emptyChunkMessage = {
-        type: 'file-chunk',
-        attachmentId: attachment.id,
-        chunkIndex: 0,
-        totalChunks: 1,
-        data: '',
-        timestamp: new Date().toISOString()
-      };
-      
-      setTimeout(() => {
-        connection.sendMessage(emptyChunkMessage);
-      }, 50);
-      return;
-    }
-    
-    // Send chunks
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * maxDataPerChunk;
-      const end = Math.min(start + maxDataPerChunk, base64Data.length);
-      const chunkData = base64Data.slice(start, end);
-      
-      const chunkMessage = {
-        type: 'file-chunk',
-        attachmentId: attachment.id,
-        chunkIndex: i,
-        totalChunks: totalChunks,
-        data: chunkData,
-        timestamp: new Date().toISOString()
-      };
-      
-      setTimeout(() => {
-        connection.sendMessage(chunkMessage);
-      }, i * 50);
-    }
+    return false;
   }
 } 
