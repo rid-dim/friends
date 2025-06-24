@@ -19,6 +19,17 @@ const config = {
 			precompress: false,
 			strict: true
 		}),
+
+		// Deaktiviere das Lesen von version.json
+		version: {
+			pollInterval: 0
+		},
+
+		// Deaktiviere das Einbetten von Umgebungsvariablen in env.js
+		env: {
+			publicPrefix: 'UNUSED_'
+		},
+
 		output: {
 			bundleStrategy: 'single'
 		}

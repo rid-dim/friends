@@ -1,12 +1,30 @@
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+  
   export let appTitle: string = 'Friends';
   export let connectionStatus: string = 'Disconnected';
   export let handshakeStatus: string = '';
   export let handshakeCountdown: string = '';
   export let notificationStatus: string = '';
+  export let username: string = '';
+  
+  const dispatch = createEventDispatcher();
+  
+  function openSettings() {
+    dispatch('openSettings');
+  }
 </script>
 
 <div class="status-bar">
+  <div class="username-container">
+    {#if username}
+      <span class="username">{username}</span>
+      <button class="settings-button" on:click={openSettings} title="Account Settings">
+        ⚙️
+      </button>
+    {/if}
+  </div>
+  
   <h1>{appTitle}</h1>
   
   <div class="status-info">
@@ -44,10 +62,42 @@
     border-bottom: 1px solid var(--line-color);
   }
   
+  .username-container {
+    min-width: 200px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .username {
+    font-weight: 600;
+    color: var(--text-color);
+  }
+  
+  .settings-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+  
+  .settings-button:hover {
+    opacity: 1;
+  }
+  
   h1 {
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
   }
   
   .status-info {

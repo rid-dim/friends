@@ -81,6 +81,7 @@
   let notification = '';
   let connectionStatus = 'Initializing...';
   let notificationStatus = '';
+  let showSettingsModal = false;
   
   // Session management
   let currentSessionId = '';
@@ -1016,9 +1017,11 @@
         
         showNotification(`Friend ${displayName} added successfully`);
         
-        // If friend has peerId, start connection attempt
+        // If friend has peerId, start connection attempt immediately
         if (peerId) {
-          startAutoReconnectForFriend(peerId);
+          console.log(`[${peerId}] Starting connection attempt for new friend`);
+          // Direkter Aufruf von startHandshakeForFriend anstatt startAutoReconnectForFriend
+          startHandshakeForFriend(peerId);
         }
       }
     } catch (error) {
@@ -1100,8 +1103,10 @@
       // Save to localStorage and account package
       saveFriends();
       
-      // Start connection attempt
-      startAutoReconnectForFriend(peerId);
+      // Start connection attempt immediately
+      console.log(`[${peerId}] Starting connection attempt after updating peer ID`);
+      // Direkter Aufruf von startHandshakeForFriend anstatt startAutoReconnectForFriend
+      startHandshakeForFriend(peerId);
       
       showNotification(`Peer ID updated for ${selectedFriend.displayName}`);
     }
@@ -1560,6 +1565,16 @@
         isHighPriority // Priority based on ID comparison
       );
       
+      // Für Debugging-Zwecke: Füge einen Timeout hinzu, der nach 35 Sekunden prüft, ob die Verbindung erfolgreich war
+      setTimeout(() => {
+        const conn = connectionManager.getConnection(peerId);
+        if (conn && !conn.isConnected) {
+          console.log(`[${peerId}] Connection check after 35s: Not connected. Role: ${isHighPriority ? 'Initiator' : 'Responder'}`);
+        } else if (conn && conn.isConnected) {
+          console.log(`[${peerId}] Connection check after 35s: Successfully connected!`);
+        }
+      }, 35000);
+      
     } catch (error) {
       console.error(`[${peerId}] Handshake failed:`, error);
       updateFriendConnectionStatus(peerId, false);
@@ -1595,10 +1610,11 @@
     // Higher value has priority and creates the offer
     const isHighPriority = myValue > theirValue;
     
-    // console.log(`[${friend.peerId}] Priority calculation:`);
-    // console.log(`  My contact ID: ${myContactId.substring(0, 16)}... = ${myValue}`);
-    // console.log(`  Their peer ID: ${theirPeerId.substring(0, 16)}... = ${theirValue}`);
-    // console.log(`  I have priority: ${isHighPriority}`);
+    // Add detailed logging to diagnose connection issues
+    console.log(`[${friend.peerId}] Priority calculation:`);
+    console.log(`  My contact ID: ${myContactId.substring(0, 16)}... = ${myValue}`);
+    console.log(`  Their peer ID: ${theirPeerId.substring(0, 16)}... = ${theirValue}`);
+    console.log(`  I have priority (will initiate): ${isHighPriority}`);
     
     return isHighPriority;
   }
@@ -1699,28 +1715,12 @@
     {handshakeStatus}
     {handshakeCountdown}
     {notificationStatus}
+    username={accountPackage?.username}
+    on:openSettings={() => showSettingsModal = true}
   />
   
   <div class="container">
     <div class="sidebar">
-      <AccountSettings
-        profileImage={accountPackage?.profileImage || ''}
-        themeUrl={accountPackage?.themeUrl || ''}
-        {language}
-        {backendUrl}
-        on:update={async ({detail}) => {
-          if (accountPackage) {
-            const success = await updateAccountPackage({
-              ...accountPackage,
-              [detail.field]: detail.value
-            });
-            if (success) {
-              showNotification(t.settingsUpdated);
-            }
-          }
-        }}
-      />
-      
       <FriendsList
         {friends}
         {selectedFriendId}
@@ -1770,7 +1770,119 @@
       </div>
     </div>
   {/if}
-                </div>
+  
+  <!-- Settings Modal -->
+  {#if showSettingsModal && accountPackage}
+    <div 
+      class="modal-overlay" 
+      on:click|self={() => showSettingsModal = false}
+      on:keydown={(e) => e.key === 'Escape' && (showSettingsModal = false)}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-title"
+    >
+      <div class="modal-content">
+        <h2 id="settings-title">{t.accountSettings}</h2>
+        <button class="close-button" on:click={() => showSettingsModal = false}>×</button>
+        
+        <div class="settings-container">
+          <div class="setting-group">
+            <label for="profile-image">{t.profileImage}</label>
+            <input
+              id="profile-image"
+              type="text"
+              placeholder={t.enterDatamapAddress}
+              value={accountPackage.profileImage || ''}
+              on:input={async (e) => {
+                if (accountPackage) {
+                  const input = e.target as HTMLInputElement;
+                  const success = await updateAccountPackage({
+                    ...accountPackage,
+                    profileImage: input.value
+                  });
+                  if (success) {
+                    showNotification(t.settingsUpdated);
+                  }
+                }
+              }}
+            />
+            {#if accountPackage.profileImage}
+              <div class="preview">
+                <img 
+                  src={accountPackage.profileImage.startsWith('http') 
+                    ? accountPackage.profileImage 
+                    : backendUrl 
+                      ? `${backendUrl}/ant-0/data/${accountPackage.profileImage}` 
+                      : `/ant-0/data/${accountPackage.profileImage}`} 
+                  alt="Profile" 
+                />
+              </div>
+            {/if}
+          </div>
+          
+          <div class="setting-group">
+            <label for="theme-url">{t.themeUrl}</label>
+            <input
+              id="theme-url"
+              type="text"
+              placeholder={t.enterThemeUrl}
+              value={accountPackage.themeUrl || ''}
+              on:input={async (e) => {
+                if (accountPackage) {
+                  const input = e.target as HTMLInputElement;
+                  const success = await updateAccountPackage({
+                    ...accountPackage,
+                    themeUrl: input.value
+                  });
+                  if (success) {
+                    showNotification(t.settingsUpdated);
+                    loadTheme(input.value);
+                  }
+                }
+              }}
+            />
+          </div>
+          
+          <div class="setting-group">
+            <label for="language">{t.language}</label>
+            <select
+              id="language"
+              value={accountPackage.language || 'en'}
+              on:change={async (e) => {
+                if (accountPackage) {
+                  const select = e.target as HTMLSelectElement;
+                  const success = await updateAccountPackage({
+                    ...accountPackage,
+                    language: select.value as 'en' | 'de'
+                  });
+                  if (success) {
+                    showNotification(t.settingsUpdated);
+                    language = select.value as 'en' | 'de';
+                  }
+                }
+              }}
+            >
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+              <option value="fr">Français</option>
+              <option value="es">Español</option>
+              <option value="bg">Български</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+              <option value="zh">中文</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="modal-buttons">
+          <button class="primary-button" on:click={() => showSettingsModal = false}>
+            Schließen
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+</div>
 
 <style>
   .app {
@@ -1835,10 +1947,66 @@
     max-width: 500px;
     width: 90%;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    position: relative;
   }
   
   .modal-content h2 {
     margin: 0 0 1rem 0;
+  }
+  
+  .close-button {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+  
+  .close-button:hover {
+    opacity: 1;
+  }
+  
+  .settings-container {
+    margin: 1.5rem 0;
+  }
+  
+  .setting-group {
+    margin-bottom: 1.5rem;
+  }
+  
+  .setting-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+  }
+  
+  .setting-group input,
+  .setting-group select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--line-color);
+    border-radius: 6px;
+    background: var(--background-color);
+    color: inherit;
+    font-size: 0.9rem;
+  }
+  
+  .preview {
+    margin-top: 0.5rem;
+    max-width: 100px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  
+  .preview img {
+    width: 100%;
+    height: auto;
+    display: block;
   }
   
   .input-group {

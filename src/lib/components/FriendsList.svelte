@@ -71,14 +71,11 @@
 </script>
 
 <div class="friends-list">
+  <!-- Nutzername wird jetzt im Header angezeigt
   <div class="my-info">
     <div class="my-name">{myUsername}</div>
-    <!-- Temporär ausgeblendet - wird später wieder benötigt
-    <button class="peer-id" on:click={copyMyPeerId} title="Click to copy">
-      {profileId.slice(0, 8)}...
-    </button>
-    -->
   </div>
+  -->
   
   <div class="friends">
     {#each friends as friend (friend.displayName)}
