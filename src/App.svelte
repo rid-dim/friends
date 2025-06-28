@@ -1100,6 +1100,9 @@
       };
       friends = [...friends];
       
+      // Update selection to use the new peerId, so the view refreshes
+      selectedFriendId = peerId;
+      
       // Save to localStorage and account package
       saveFriends();
       

@@ -115,22 +115,22 @@
           </div>
         {:else if friendScratchpadAddress}
           <div class="friend-contact-id">
-            <span class="label">Contact ID for {friendName}:</span>
+            <span class="label">Contact ID to share with {friendName}:</span>
             <button class="peer-id" on:click={() => copyPeerId(friendScratchpadAddress)} title="Click to copy">
               {friendScratchpadAddress.slice(0, 8)}...
             </button>
           </div>
           {#if friendPeerId}
             <div class="friend-peer-id">
-              <span class="label">Peer ID:</span>
+              <span class="label">{friendName}'s Contact ID shared with us:</span>
               <button class="peer-id" on:click={() => copyPeerId(friendPeerId)} title="Click to copy">
                 {friendPeerId.slice(0, 8)}...
               </button>
             </div>
           {:else}
             {#if !showPeerIdInput}
-              <button class="add-peer-id" on:click={() => showPeerIdInput = true} title="Add friend's peer ID">
-                + Add Peer ID
+              <button class="add-peer-id" on:click={() => showPeerIdInput = true} title="Add friend's contact ID">
+                + Add Contact ID
               </button>
             {/if}
             {#if showPeerIdInput}
@@ -138,7 +138,7 @@
                 <input
                   type="text"
                   bind:value={newPeerId}
-                  placeholder="Enter friend's peer ID"
+                  placeholder="Enter friend's contact ID"
                 />
                 <button on:click={() => {
                   if (newPeerId.trim()) {

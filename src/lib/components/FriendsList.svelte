@@ -29,7 +29,6 @@
   const dispatch = createEventDispatcher();
   
   let showAddFriend = false;
-  let newFriendPeerId = '';
   let newFriendName = '';
   
   function handleAddFriend() {
@@ -39,12 +38,10 @@
     }
     
     dispatch('addFriend', {
-      peerId: newFriendPeerId.trim() || undefined,
       displayName: newFriendName.trim()
     });
     
     // Reset form
-    newFriendPeerId = '';
     newFriendName = '';
     showAddFriend = false;
   }
@@ -129,33 +126,29 @@
   
   <div class="add-friend-section">
     {#if showAddFriend}
-      <div class="add-friend-form">
+      <form class="add-friend-form" on:submit|preventDefault={handleAddFriend}>
         <input
           type="text"
           bind:value={newFriendName}
           placeholder={t.enterFriendName}
         />
-        <input
-          type="text"
-          bind:value={newFriendPeerId}
-          placeholder={t.enterPeerId + ' (optional)'}
-        />
         <div class="form-buttons">
           <button
+            type="button"
             class="cancel"
             on:click={() => showAddFriend = false}
           >
             ✕
           </button>
           <button
+            type="submit"
             class="confirm"
-            on:click={handleAddFriend}
             disabled={!newFriendName.trim()}
           >
             ✓
           </button>
         </div>
-      </div>
+      </form>
     {:else}
       <button
         class="add-friend-button"
