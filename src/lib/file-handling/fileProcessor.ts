@@ -152,7 +152,9 @@ export function downloadAttachment(attachment: FileAttachment): void {
  * Converts base64 to a Blob object
  */
 export function base64ToBlob(base64Data: string, mimeType: string): Blob {
-  const byteCharacters = atob(base64Data);
+  // Remove MIME prefix if present
+  const cleanBase64Data = base64Data.split(',').pop() || base64Data;
+  const byteCharacters = atob(cleanBase64Data);
   const byteArrays = [];
   
   for (let offset = 0; offset < byteCharacters.length; offset += 512) {
