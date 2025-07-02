@@ -66,7 +66,7 @@
   
   // Connection management
   let connectionManager: ConnectionManager;
-  let handshakeServerUrl = 'https://handshake.autonomi.space';
+  // Handshake server URL is no longer needed - using DwebConnector with scratchpads
   let handshakeStatus = '';
   let handshakeCountdown = '';
   let handshakeCountdowns: Record<string, number | {
@@ -1560,12 +1560,15 @@
       console.log(`[${peerId}] Using smokesigns for connection with priority: ${isHighPriority ? 'true (initiator)' : 'false (responder)'}`);
       console.log(`[${peerId}] Using addresses: read=${peerId}, write=${myAddress}`);
       
-      // Create new connection using smokesigns integration
+      // Create new connection using smokesigns integration with DwebConnector
       connectionManager.createConnectionUsingSigns(
         peerId,
         myAddress,  // My address (write to)
         peerId,     // Their address (read from)
-        isHighPriority // Priority based on ID comparison
+        isHighPriority, // Priority based on ID comparison
+        backendUrl, // Backend URL from query parameter
+        accountName, // Account name from query parameter
+        friend.displayName // Tatsächlicher Anzeigename des Freundes
       );
       
       // Für Debugging-Zwecke: Füge einen Timeout hinzu, der nach 35 Sekunden prüft, ob die Verbindung erfolgreich war

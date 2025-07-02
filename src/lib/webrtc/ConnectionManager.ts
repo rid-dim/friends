@@ -1,6 +1,6 @@
 // WebRTC Connection Manager for multiple peer connections
 import type { FileAttachment } from '../file-handling/types';
-import { Link, HandshakeserverConnector } from 'smokesigns';
+import { Link, DwebConnector } from 'smokesigns';
 import type { ReadWriteInterface } from 'smokesigns';
 
 export interface ConnectionEvents {
@@ -37,16 +37,26 @@ export class SinglePeerConnection {
     chunkSize: number,
     attachment: FileAttachment
   }> = new Map();
+  private backendUrl: string;
+  private accountName: string;
+  private friendName: string;
 
   constructor(peerId: string, events: ConnectionEvents, 
-    myAddress: string, peerAddress: string, priority: boolean) {
+    myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', accountName: string = '', friendName: string = '') {
     this.peerId = peerId;
     this.events = events;
+    this.backendUrl = backendUrl;
+    this.accountName = accountName;
+    // Verwende den übergebenen friendName oder fallback auf peerId
+    this.friendName = friendName || peerId;
     
-    console.log(`[${this.peerId}] Creating smokesigns Link with addresses:`, { 
+    console.log(`[${this.peerId}] Creating smokesigns Link with DwebConnector:`, { 
       readAddress: peerAddress,
       writeAddress: myAddress,
-      priority
+      priority,
+      backendUrl: backendUrl || '',
+      accountName: accountName || '',
+      friendName: this.friendName
     });
     
     // Create smokesigns link
@@ -55,18 +65,23 @@ export class SinglePeerConnection {
   
   private setupLink(myAddress: string, peerAddress: string, priority: boolean): void {
     try {
-      // Create handshake server connector
-      const connector = new HandshakeserverConnector({
-        serverUrl: 'https://handshake.autonomi.space',
-        readAddress: peerAddress, // Read from peer's address
-        writeAddress: myAddress   // Write to my address
+      // Create dweb connector for scratchpad-based handshake
+      // Format: {friendName}comm{accountName} - konsistent mit buildFriendScratchpadUrl in App.svelte
+      // Wir verwenden den tatsächlichen friendName (display name)
+      const objectName = this.accountName ? `${this.friendName}comm${this.accountName}` : `${this.friendName}comm`;
+      
+      const connector = new DwebConnector({
+        backendUrl: this.backendUrl, // Use the backend URL from query parameter
+        writeTuple: ['friends', objectName], // [appname, objectname] - using 'friends' app name
+        readScratchpadAddress: peerAddress // Friend's contact ID (scratchpad address)
       });
 
-      console.log(`[${this.peerId}] Creating smokesigns Link with:`, {
-        serverUrl: 'https://handshake.autonomi.space',
-        readAddress: peerAddress.substring(0, 8) + '...',
-        writeAddress: myAddress.substring(0, 8) + '...',
-        priority
+      console.log(`[${this.peerId}] Creating smokesigns Link with DwebConnector:`, {
+        backendUrl: this.backendUrl || 'relative',
+        writeTuple: ['friends', objectName],
+        readScratchpadAddress: peerAddress.substring(0, 8) + '...',
+        priority,
+        objectNameFormat: `${this.friendName}comm${this.accountName || ''}`
       });
 
       // Create link
@@ -745,7 +760,7 @@ export class ConnectionManager {
   /**
    * Create a new connection using the smokesigns library
    */
-  createConnectionUsingSigns(peerId: string, myAddress: string, peerAddress: string, priority: boolean): SinglePeerConnection {
+  createConnectionUsingSigns(peerId: string, myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', accountName: string = '', friendName: string = ''): SinglePeerConnection {
     // Close existing connection if any
     this.closeConnection(peerId);
     
@@ -754,7 +769,10 @@ export class ConnectionManager {
       this.events, 
       myAddress, 
       peerAddress,
-      priority
+      priority,
+      backendUrl,
+      accountName,
+      friendName
     );
     
     this.connections.set(peerId, connection);
