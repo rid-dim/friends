@@ -8,10 +8,15 @@
   import Chat from './lib/components/Chat.svelte';
   import type { Friend } from './lib/components/FriendsList.svelte';
   import AccountSettings from './lib/components/AccountSettings.svelte';
+  import FriendRequestModal from './lib/components/FriendRequestModal.svelte';
+  import FriendRequestNotification from './lib/components/FriendRequestNotification.svelte';
+  import ProfileModal from './lib/components/ProfileModal.svelte';
   
   // Import WebRTC and file handling
   import { ConnectionManager } from './lib/webrtc/ConnectionManager';
   import type { FileAttachment } from './lib/file-handling/types';
+  import { FriendRequestManager } from './lib/webrtc/FriendRequestManager';
+  import type { FriendRequest, ProfileData } from './lib/webrtc/FriendRequestManager';
   
   // Import styles
   import './lib/styles/theme.css';
@@ -30,6 +35,7 @@
       peerId?: string; // Optional - can be added later
       displayName: string;
       scratchpadAddress?: string; // The scratchpad address for this friend
+      targetProfileId?: string; // Store the target profile ID for matching approvals
     }>;
     activeSession?: {
       sessionId: string;
@@ -82,6 +88,15 @@
   let connectionStatus = 'Initializing...';
   let notificationStatus = '';
   let showSettingsModal = false;
+  
+  // Friend Request state
+  let friendRequestManager: FriendRequestManager | null = null;
+  let showFriendRequestModal = false;
+  let showProfileModal = false;
+  let pendingFriendRequests: FriendRequest[] = [];
+  let selectedFriendRequest: FriendRequest | null = null;
+  let selectedProfileData: ProfileData | null = null;
+  let friendRequestCheckInterval: ReturnType<typeof setInterval> | null = null;
   
   // Session management
   let currentSessionId = '';
@@ -409,10 +424,25 @@
         
         // Load friends from account package
         if (fetchedPackage.friends) {
-          friends = fetchedPackage.friends.map(f => ({
+          // 1) Dubletten in der Friend-Liste des Account-Pakets bereinigen (Key = displayName)
+          const dedupedFriendsData: Array<{peerId?: string, displayName: string, scratchpadAddress?: string, targetProfileId?: string}> = [];
+          for (const f of fetchedPackage.friends) {
+            if (!dedupedFriendsData.some(e => e.displayName === f.displayName)) {
+              dedupedFriendsData.push(f);
+            }
+          }
+
+          // Wenn wir Einträge entfernt haben, Account-Package sofort aktualisieren
+          if (dedupedFriendsData.length !== fetchedPackage.friends.length) {
+            console.log('🧹 Duplicate friends removed from account package:', fetchedPackage.friends.length - dedupedFriendsData.length);
+            await updateAccountPackage({ friends: dedupedFriendsData });
+          }
+
+          friends = dedupedFriendsData.map(f => ({
             peerId: f.peerId,
             displayName: f.displayName,
             scratchpadAddress: f.scratchpadAddress,
+            targetProfileId: f.targetProfileId,
             isConnected: false,
             unreadCount: 0
           }));
@@ -453,6 +483,23 @@
     // Initialize peer communication only if session is active
     if (isSessionActive) {
       await initializePeerCommunication();
+      
+      // Friend Request Manager initialisieren (erstellt/verifiziert Profil-Scratchpad)
+      if (accountPackage) {
+        friendRequestManager = new FriendRequestManager(backendUrl, profileId, accountName || accountPackage.username);
+
+        const ok = await friendRequestManager.initializeProfile();
+
+        if (ok) {
+          profileId = friendRequestManager.getProfileId();
+        }
+
+        if (accountPackage.profileImage) {
+          await friendRequestManager.updateProfileImage(accountPackage.profileImage);
+        }
+
+        startFriendRequestCheck();
+      }
     }
     
     // Update debug info
@@ -758,6 +805,22 @@
       
       // Initialize peer communication after account creation
       await initializePeerCommunication();
+      
+      // Initialize Friend Request Manager after we have a profileId
+      if (profileId && accountPackage) {
+        friendRequestManager = new FriendRequestManager(backendUrl, profileId, accountName || accountPackage.username);
+        
+        // Initialize profile on first run
+        await friendRequestManager.initializeProfile();
+        
+        // Update profile image if available
+        if (accountPackage.profileImage) {
+          await friendRequestManager.updateProfileImage(accountPackage.profileImage);
+        }
+        
+        // Start checking for friend requests
+        startFriendRequestCheck();
+      }
     }
     
     isLoadingAccountPackage = false;
@@ -1122,7 +1185,8 @@
     const friendsData = friends.map(f => ({
       peerId: f.peerId,
       displayName: f.displayName,
-      scratchpadAddress: f.scratchpadAddress
+      scratchpadAddress: f.scratchpadAddress,
+      targetProfileId: f.targetProfileId
     }));
     
     localStorage.setItem('friends', JSON.stringify(friendsData));
@@ -1134,7 +1198,7 @@
   }
   
   // Update account package with friends list
-  async function updateAccountPackageFriends(friendsData: Array<{peerId?: string, displayName: string, scratchpadAddress?: string}>) {
+  async function updateAccountPackageFriends(friendsData: Array<{peerId?: string, displayName: string, scratchpadAddress?: string, targetProfileId?: string}>) {
     const success = await updateAccountPackage({ friends: friendsData });
     if (success) {
       console.log('✅ Friends list saved to account package');
@@ -1624,6 +1688,338 @@
     
     return isHighPriority;
   }
+
+  // Friend Request Event Handlers
+  function handleShowFriendRequestModal() {
+    showFriendRequestModal = true;
+  }
+  
+  function handleCloseFriendRequestModal() {
+    showFriendRequestModal = false;
+  }
+  
+  async function handleSendFriendRequest(event: CustomEvent<{ profileId: string; displayName: string }>) {
+    const { profileId, displayName } = event.detail;
+    
+    if (!friendRequestManager) {
+      showNotification(t.errorSendingRequest);
+      return;
+    }
+    
+    try {
+      // Create or get friend scratchpad for handshake
+      const scratchpadAddress = await createOrGetFriendScratchpad(displayName);
+      
+      // Send friend request with handshake address
+      await friendRequestManager.sendFriendRequest(profileId, scratchpadAddress, displayName);
+      
+      // Add friend to local list (without peerId yet)
+      const newFriend: Friend = {
+        displayName,
+        isConnected: false,
+        unreadCount: 0,
+        scratchpadAddress: scratchpadAddress, // Our handshake address for this friend
+        targetProfileId: profileId // Store the target profile ID for matching approvals
+      };
+      
+      // Prüfe, ob bereits ein Friend mit gleichem displayName existiert
+      const existingIdx = friends.findIndex(f => f.displayName === displayName);
+      if (existingIdx >= 0) {
+        // Freund aktualisieren statt neu hinzuzufügen
+        console.log('⚠️ Found existing friend with same name in send request:', friends[existingIdx]);
+        console.log('🔄 New request data:', newFriend);
+        
+        // Wichtig: Nur vorhandene Werte übernehmen
+        const updatedFriend = {
+          ...friends[existingIdx],
+          // scratchpadAddress nur überschreiben, wenn newFriend.scratchpadAddress vorhanden ist
+          ...(newFriend.scratchpadAddress ? { scratchpadAddress: newFriend.scratchpadAddress } : {}),
+          // targetProfileId nur überschreiben, wenn newFriend.targetProfileId vorhanden ist
+          ...(newFriend.targetProfileId ? { targetProfileId: newFriend.targetProfileId } : {})
+        };
+        
+        console.log('✅ Updated friend from request:', updatedFriend);
+        friends[existingIdx] = updatedFriend;
+        friends = [...friends]; // Svelte-Update triggern
+      } else {
+        friends = [...friends, newFriend];
+      }
+      
+      // Update account package
+      if (accountPackage) {
+        const updatedPackage = {
+          ...accountPackage,
+          friends: friends.map(f => ({
+            peerId: f.peerId,
+            displayName: f.displayName,
+            scratchpadAddress: f.scratchpadAddress,
+            targetProfileId: f.targetProfileId
+          }))
+        };
+        await updateAccountPackage(updatedPackage);
+      }
+      
+      showNotification(t.friendRequestSent || 'Friend request sent');
+      showFriendRequestModal = false;
+    } catch (error) {
+      console.error('Error sending friend request:', error);
+      showNotification(t.errorSendingRequest);
+    }
+  }
+  
+  function handleShowFriendRequests() {
+    if (pendingFriendRequests.length > 0) {
+      selectedFriendRequest = pendingFriendRequests[0];
+      loadProfileForRequest(selectedFriendRequest);
+      showProfileModal = true;
+    }
+  }
+  
+  async function loadProfileForRequest(request: FriendRequest) {
+    if (!friendRequestManager || !request.profileId) return;
+    
+    try {
+      const profileData = await friendRequestManager.readProfile(request.profileId);
+      selectedProfileData = profileData;
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      selectedProfileData = null;
+    }
+  }
+  
+  function handleCloseProfileModal() {
+    showProfileModal = false;
+    selectedFriendRequest = null;
+    selectedProfileData = null;
+  }
+  
+  async function handleAcceptFriendRequest(event: CustomEvent<{ displayName: string }>) {
+    const { displayName } = event.detail;
+    
+    // Save current request to avoid it being cleared by close handler
+    const currentRequest = selectedFriendRequest;
+    
+    if (!friendRequestManager || !currentRequest) {
+      showNotification('Error accepting request');
+      return;
+    }
+    
+    try {
+      // Create or get friend scratchpad for handshake
+      const scratchpadAddress = await createOrGetFriendScratchpad(displayName);
+      
+      // Send approval with our handshake address
+      await friendRequestManager.acceptFriendRequest(currentRequest.profileId, scratchpadAddress);
+      
+      // Add friend to local list with their handshake address as peerId
+      const newFriend: Friend = {
+        peerId: currentRequest.request, // Their handshake address from the request
+        displayName,
+        isConnected: false,
+        unreadCount: 0,
+        scratchpadAddress: scratchpadAddress, // Our handshake address for this friend
+        targetProfileId: currentRequest.profileId // Store their profile ID
+      };
+      
+      // Prüfe, ob bereits ein Friend mit gleichem displayName existiert
+      const existingIdx = friends.findIndex(f => f.displayName === displayName);
+      if (existingIdx >= 0) {
+        // Freund aktualisieren statt neu hinzuzufügen
+        console.log('⚠️ Found existing friend with same name, updating:', friends[existingIdx]);
+        console.log('🔄 New data:', newFriend);
+        
+        // Wichtig: peerId immer übernehmen, wenn vorhanden!
+        const updatedFriend = {
+          ...friends[existingIdx],
+          // peerId nur überschreiben, wenn newFriend.peerId vorhanden ist
+          ...(newFriend.peerId ? { peerId: newFriend.peerId } : {}),
+          // scratchpadAddress nur überschreiben, wenn newFriend.scratchpadAddress vorhanden ist
+          ...(newFriend.scratchpadAddress ? { scratchpadAddress: newFriend.scratchpadAddress } : {}),
+          // targetProfileId nur überschreiben, wenn newFriend.targetProfileId vorhanden ist
+          ...(newFriend.targetProfileId ? { targetProfileId: newFriend.targetProfileId } : {})
+        };
+        
+        console.log('✅ Updated friend:', updatedFriend);
+        friends[existingIdx] = updatedFriend;
+        friends = [...friends]; // Svelte-Update triggern
+      } else {
+        friends = [...friends, newFriend];
+      }
+      
+      // Update account package
+      if (accountPackage) {
+        const updatedPackage = {
+          ...accountPackage,
+          friends: friends.map(f => ({
+            peerId: f.peerId,
+            displayName: f.displayName,
+            scratchpadAddress: f.scratchpadAddress,
+            targetProfileId: f.targetProfileId
+          }))
+        };
+        await updateAccountPackage(updatedPackage);
+      }
+      
+      // Remove processed request from my friend request scratchpad
+      await friendRequestManager.removeProcessedRequest(currentRequest.profileId);
+      
+      // Remove from pending requests
+      pendingFriendRequests = pendingFriendRequests.filter(r => r.request !== currentRequest.request);
+      
+      showNotification('Friend request accepted');
+      handleCloseProfileModal();
+      
+      // Start connection attempt
+      if (newFriend.peerId) {
+        startAutoReconnectForFriend(newFriend.peerId);
+      }
+    } catch (error) {
+      console.error('Error accepting friend request:', error);
+      showNotification('Error accepting request');
+    }
+  }
+  
+  // Start checking for friend requests
+  function startFriendRequestCheck() {
+    if (!friendRequestManager) return;
+    
+    // Check immediately
+    checkFriendRequests();
+    
+    // Then check every minute
+    friendRequestCheckInterval = setInterval(checkFriendRequests, 60000);
+  }
+  
+  // Check for friend requests periodically
+  async function checkFriendRequests() {
+    if (!friendRequestManager) return;
+    
+    try {
+      const requests = await friendRequestManager.checkPendingRequests();
+      pendingFriendRequests = requests;
+      
+      // Check for received approvals
+      const approvals = await friendRequestManager.checkReceivedApprovals();
+      console.log('🔍 Approvals fetched:', approvals);
+      
+      for (const approval of approvals) {
+        // Find the friend we sent a request to by matching the profile ID
+        const friendIndex = friends.findIndex(f => {
+          // Match by targetProfileId - this is the profile we sent the request to
+          const match = f.targetProfileId === approval.profileId && !f.peerId;
+          if (match) {
+            console.log('✅ Found matching friend for approval', f.displayName);
+          }
+          return match;
+        });
+        
+        if (friendIndex >= 0 && approval.approval) {
+          // Update friend with their handshake address
+          friends[friendIndex] = {
+            ...friends[friendIndex],
+            peerId: approval.approval // Their handshake address from the approval
+          };
+          
+          // Update account package
+          if (accountPackage) {
+            const updatedPackage = {
+              ...accountPackage,
+              friends: friends.map(f => ({
+                peerId: f.peerId,
+                displayName: f.displayName,
+                scratchpadAddress: f.scratchpadAddress,
+                targetProfileId: f.targetProfileId
+              }))
+            };
+            await updateAccountPackage(updatedPackage);
+          }
+          
+          showNotification(`Friend request accepted by ${friends[friendIndex].displayName}`);
+          
+          // Start connection attempt
+          startAutoReconnectForFriend(approval.approval);
+          
+          // Remove the processed approval from the scratchpad
+          await friendRequestManager.removeProcessedApproval(approval.profileId);
+        } else if (friendIndex === -1 && approval.approval) {
+          // Kein passender Freund gefunden (evtl. wurde targetProfileId noch nicht gespeichert) -> neuen Friend anlegen
+          console.log('➕ Creating new friend from approval for profile', approval.profileId);
+          try {
+            let displayName = approval.profileId.slice(0, 8) + '...';
+            let scratchpadAddress: string | undefined = undefined;
+
+            // Versuche Profil zu laden, um accountname zu bekommen
+            if (friendRequestManager) {
+              const profile = await friendRequestManager.readProfile(approval.profileId);
+              if (profile && profile.accountname) {
+                displayName = profile.accountname;
+              }
+            }
+
+            // Erstelle/ermittle eigenes Scratchpad für diesen Freund
+            scratchpadAddress = await createOrGetFriendScratchpad(displayName);
+
+            const newFriend: Friend = {
+              peerId: approval.approval,
+              displayName,
+              isConnected: false,
+              unreadCount: 0,
+              scratchpadAddress,
+              targetProfileId: approval.profileId
+            };
+            
+            // Prüfe auf bestehenden Freund mit gleichem Namen
+            const existingIdx = friends.findIndex(f => f.displayName === displayName);
+            if (existingIdx >= 0) {
+              console.log('⚠️ Found existing friend with same name in approval handler:', friends[existingIdx]);
+              console.log('🔄 New approval data:', newFriend);
+              
+              // Wichtig: peerId immer übernehmen, wenn vorhanden!
+              const updatedFriend = {
+                ...friends[existingIdx],
+                // peerId nur überschreiben, wenn newFriend.peerId vorhanden ist
+                ...(newFriend.peerId ? { peerId: newFriend.peerId } : {}),
+                // scratchpadAddress nur überschreiben, wenn newFriend.scratchpadAddress vorhanden ist
+                ...(newFriend.scratchpadAddress ? { scratchpadAddress: newFriend.scratchpadAddress } : {}),
+                // targetProfileId nur überschreiben, wenn newFriend.targetProfileId vorhanden ist
+                ...(newFriend.targetProfileId ? { targetProfileId: newFriend.targetProfileId } : {})
+              };
+              
+              console.log('✅ Updated friend from approval:', updatedFriend);
+              friends[existingIdx] = updatedFriend;
+              friends = [...friends]; // Svelte-Update triggern
+            } else {
+              friends = [...friends, newFriend];
+            }
+
+            // Account Package aktualisieren
+            if (accountPackage) {
+              const updatedPackage = {
+                ...accountPackage,
+                friends: friends.map(f => ({
+                  peerId: f.peerId,
+                  displayName: f.displayName,
+                  scratchpadAddress: f.scratchpadAddress,
+                  targetProfileId: f.targetProfileId
+                }))
+              };
+              await updateAccountPackage(updatedPackage);
+            }
+
+            showNotification(`Friend request accepted by ${displayName}`);
+            startAutoReconnectForFriend(approval.approval);
+
+            // Approval entfernen
+            await friendRequestManager.removeProcessedApproval(approval.profileId);
+          } catch (e) {
+            console.error('Error creating friend from approval:', e);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking friend requests:', error);
+    }
+  }
 </script>
 
 <div class="app">
@@ -1715,15 +2111,24 @@
     </div>
   {/if}
 
-  <StatusBar 
-    appTitle="Friends"
-    {connectionStatus}
-    {handshakeStatus}
-    {handshakeCountdown}
-    {notificationStatus}
-    username={accountPackage?.username}
-    on:openSettings={() => showSettingsModal = true}
-  />
+  <div class="header-container">
+    <StatusBar 
+      appTitle="Friends"
+      {connectionStatus}
+      {handshakeStatus}
+      {handshakeCountdown}
+      {notificationStatus}
+      username={accountPackage?.username}
+      on:openSettings={() => showSettingsModal = true}
+    />
+    <div class="header-buttons">
+      <FriendRequestNotification
+        pendingRequests={pendingFriendRequests.length}
+        {language}
+        on:click={handleShowFriendRequests}
+      />
+    </div>
+  </div>
   
   <div class="container">
     <div class="sidebar">
@@ -1735,7 +2140,7 @@
         {handshakeCountdowns}
         {language}
         on:selectFriend={handleSelectFriend}
-        on:addFriend={handleAddFriend}
+        on:addFriend={handleShowFriendRequestModal}
         on:removeFriend={handleRemoveFriend}
         on:notification={(e) => showNotification(e.detail)}
       />
@@ -1807,6 +2212,10 @@
                     profileImage: input.value
                   });
                   if (success) {
+                    // Profil-Scratchpad aktualisieren
+                    if (friendRequestManager) {
+                      await friendRequestManager.updateProfileImage(input.value);
+                    }
                     showNotification(t.settingsUpdated);
                   }
                 }
@@ -1887,6 +2296,28 @@
         </div>
       </div>
     </div>
+  {/if}
+  
+  <!-- Friend Request Modal -->
+  {#if showFriendRequestModal}
+    <FriendRequestModal
+      {friendRequestManager}
+      {language}
+      on:close={handleCloseFriendRequestModal}
+      on:friendRequestSent={handleSendFriendRequest}
+    />
+  {/if}
+  
+  <!-- Profile Modal for incoming friend requests -->
+  {#if showProfileModal && selectedFriendRequest}
+    <ProfileModal
+      friendRequest={selectedFriendRequest}
+      profileData={selectedProfileData}
+      {friendRequestManager}
+      {language}
+      on:close={handleCloseProfileModal}
+      on:accept={handleAcceptFriendRequest}
+    />
   {/if}
 </div>
 
@@ -2159,5 +2590,20 @@
     overflow-y: auto; /* Enable vertical scrolling */
     max-height: 100%; /* Ensure it doesn't exceed container height */
     padding-bottom: 10px; /* Add some bottom padding for better scrolling experience */
+  }
+  
+  .header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--background-color);
+    border-bottom: 1px solid var(--line-color);
+  }
+  
+  .header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-right: 1rem;
   }
 </style> 

@@ -7,6 +7,7 @@
     unreadCount: number;
     isLoadingScratchpad?: boolean;
     scratchpadError?: boolean;
+    targetProfileId?: string; // Profile-ID des Freundes (für Freundschaftsanfragen)
   }
 </script>
 
@@ -28,22 +29,9 @@
   
   const dispatch = createEventDispatcher();
   
-  let showAddFriend = false;
-  let newFriendName = '';
-  
   function handleAddFriend() {
-    if (!newFriendName.trim()) {
-      dispatch('notification', 'Please enter a friend name');
-      return;
-    }
-    
-    dispatch('addFriend', {
-      displayName: newFriendName.trim()
-    });
-    
-    // Reset form
-    newFriendName = '';
-    showAddFriend = false;
+    // Just dispatch the event to open the modal
+    dispatch('addFriend');
   }
   
   function handleRemoveFriend(friend: Friend) {
@@ -125,38 +113,12 @@
   </div>
   
   <div class="add-friend-section">
-    {#if showAddFriend}
-      <form class="add-friend-form" on:submit|preventDefault={handleAddFriend}>
-        <input
-          type="text"
-          bind:value={newFriendName}
-          placeholder={t.enterFriendName}
-        />
-        <div class="form-buttons">
-          <button
-            type="button"
-            class="cancel"
-            on:click={() => showAddFriend = false}
-          >
-            ✕
-          </button>
-          <button
-            type="submit"
-            class="confirm"
-            disabled={!newFriendName.trim()}
-          >
-            ✓
-          </button>
-        </div>
-      </form>
-    {:else}
-      <button
-        class="add-friend-button"
-        on:click={() => showAddFriend = true}
-      >
-        + {t.addFriend}
-      </button>
-    {/if}
+    <button
+      class="add-friend-button"
+      on:click={handleAddFriend}
+    >
+      + {t.addFriend}
+    </button>
   </div>
 </div>
 
