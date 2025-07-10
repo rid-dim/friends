@@ -6,7 +6,7 @@
   import StatusBar from './lib/components/StatusBar.svelte';
   import FriendsList from './lib/components/FriendsList.svelte';
   import Chat from './lib/components/Chat.svelte';
-  import type { Friend } from './lib/components/FriendsList.svelte';
+  import type { Friend } from './lib/types';
   import AccountSettings from './lib/components/AccountSettings.svelte';
   import FriendRequestModal from './lib/components/FriendRequestModal.svelte';
   import FriendRequestNotification from './lib/components/FriendRequestNotification.svelte';
@@ -107,6 +107,8 @@
   
   // Language state
   let language: 'en' | 'de' = 'en';
+  // Debug flag via ?debug=true
+  let debugMode: boolean = false;
   
   // Update language when account package changes
   $: if (accountPackage?.language) {
@@ -150,6 +152,10 @@
     
     // Start handshake loop with smokesigns integration
     startHandshakeLoop();
+    
+    // after other state variables definitions
+    // ... in onMount parse debug
+    debugMode = parseDebugFlag();
     
     return () => {
       // Cleanup
@@ -1032,6 +1038,30 @@
     if (friend) {
       friend.unreadCount = 0;
       friends = friends;
+    }
+
+    // Load profile image for newly selected friend, if necessary.
+    if (selectedFriend) {
+      loadProfileImage(selectedFriend);
+    }
+  }
+
+  async function loadProfileImage(friendObj: Friend) {
+    console.log('loadProfileImage called, friendRequestManager:', !!friendRequestManager);
+    if (!friendRequestManager) return;
+    if (!friendObj.targetProfileId) return;
+    try {
+      const prof = await friendRequestManager.readProfile(friendObj.targetProfileId);
+      if (prof && prof.profileImage) {
+        console.log('Loaded profile data:', prof);
+        const idx = friends.findIndex(f => f === friendObj);
+        if (idx !== -1) {
+          friends[idx] = { ...friends[idx], profileImage: prof.profileImage };
+          friends = [...friends];
+        }
+      }
+    } catch (e) {
+      console.error('Error loading profile image', e);
     }
   }
   
@@ -2025,10 +2055,11 @@
   }
 
   async function handleDeclineFriendRequest() {
-    if (!friendRequestManager || !selectedFriendRequest) return;
+    const req = selectedFriendRequest;
+    if (!friendRequestManager || !req) return;
     try {
-      await friendRequestManager.removeProcessedRequest(selectedFriendRequest.profileId);
-      pendingFriendRequests = pendingFriendRequests.filter(r => !(r.profileId === selectedFriendRequest.profileId && r.time === selectedFriendRequest.time));
+      await friendRequestManager.removeProcessedRequest(req.profileId);
+      pendingFriendRequests = pendingFriendRequests.filter(r => !(r.profileId === req.profileId && r.time === req.time));
       showNotification('Friend request declined');
     } catch (error) {
       console.error('Error declining friend request:', error);
@@ -2052,6 +2083,33 @@
       }
       saveFriends();
     }
+  }
+
+  // add function
+  function parseDebugFlag(): boolean {
+    if (!browser) return false;
+    const params = new URLSearchParams(window.location.search);
+    const dbg = params.get('debug');
+    return dbg !== null && dbg.toLowerCase() === 'true';
+  }
+
+  $: {
+    if (friends.length > 0) {
+      if (!selectedFriend) {
+        selectedFriend = friends[0];
+      }
+      // Log debug info
+      console.log('🚀 Friends App Started'); 
+      console.log('📦 Debug info available at: sessionStorage.friendsDebugInfo');
+      console.log('🔍 To view: JSON.parse(sessionStorage.getItem("friendsDebugInfo"))');
+      sessionStorage.setItem('friendsDebugInfo', JSON.stringify({ friends, selectedFriend }));
+    }
+  }
+
+  // ... existing code ...
+  $: if (selectedFriend && !selectedFriend.profileImage && selectedFriend.targetProfileId && friendRequestManager) {
+    console.log('Reactive loadProfileImage triggered for', selectedFriend.displayName);
+    loadProfileImage(selectedFriend);
   }
 </script>
 
@@ -2180,23 +2238,32 @@
         </div>
         
     <div class="main-content">
-      <Chat
-        messages={currentChatMessages}
-        myNick={accountPackage?.username || 'User'}
-        isConnected={selectedFriend?.isConnected || false}
-        friendName={selectedFriend?.displayName || ''}
-        friendPeerId={selectedFriend?.peerId || ''}
-        friendScratchpadAddress={selectedFriend?.scratchpadAddress || ''}
-        isLoadingScratchpad={selectedFriend?.isLoadingScratchpad || false}
-        scratchpadError={selectedFriend?.scratchpadError || false}
-        {language}
-        on:sendMessage={handleSendMessage}
-        on:notification={(e) => showNotification(e.detail)}
-        on:updatePeerId={handleUpdatePeerId}
-        on:renameFriend={handleRenameFriend}
-      />
-              </div>
-                </div>
+      {#if selectedFriend}
+        <Chat
+          friend={selectedFriend}
+          messages={currentChatMessages}
+          myNick={accountPackage?.username || 'User'}
+          isConnected={selectedFriend.isConnected}
+          friendName={selectedFriend.displayName}  
+          friendPeerId={selectedFriend.peerId}
+          friendScratchpadAddress={selectedFriend.scratchpadAddress}
+          isLoadingScratchpad={selectedFriend.isLoadingScratchpad}
+          scratchpadError={selectedFriend.scratchpadError}
+          language={language}
+          debug={debugMode}
+          backendUrl={backendUrl}
+          on:message={handleSendMessage}
+          on:updatePeerId={handleUpdatePeerId}
+          on:renameFriend={handleRenameFriend}
+        />
+      {:else}
+        <div class="no-friend-selected">
+          <h2>{translations[language].welcome}</h2>
+          <p>{translations[language].noFriendSelected}</p>
+        </div>  
+      {/if}
+    </div>
+  </div>
   
   {#if notification}
     <div class="notification">

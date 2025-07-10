@@ -25,6 +25,8 @@
   export let isLoadingScratchpad: boolean = false;
   export let scratchpadError: boolean = false;
   export let language: 'en' | 'de' = 'en';
+  export let debug: boolean = false;
+  export let backendUrl: string = '';
   
   const dispatch = createEventDispatcher();
   
@@ -35,6 +37,12 @@
   let newPeerId = '';
   let isEditingName = false;
   let editedName = '';
+  let avatarUrl: string | null = null;
+
+  $: {
+    avatarUrl = friend?.profileImage ? (friend.profileImage.startsWith('http') ? friend.profileImage : backendUrl ? `${backendUrl}/ant-0/data/${friend.profileImage}` : `/ant-0/data/${friend.profileImage}`) : null;
+    console.log('Constructed avatar URL:', avatarUrl);
+  }
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -142,7 +150,7 @@
   {#if friendName}
     <div class="chat-header">
       {#if friend?.profileImage}
-        <img class="friend-avatar" src={friend.profileImage} alt={friend.displayName ?? ''} />
+        <img class="friend-avatar" src={avatarUrl} alt={friend?.displayName ?? ''} />
       {:else}
         <div class="friend-avatar placeholder">
           {friendName.charAt(0).toUpperCase()}
@@ -158,6 +166,7 @@
             <button class="edit-btn" on:click={startEdit} title="Edit">✏️</button>
           {/if}
         </div>
+        {#if debug}
         <div class="contact-info">
           {#if friendScratchpadAddress}
             <div class="friend-contact-id">
@@ -172,6 +181,7 @@
             </div>
           {/if}
         </div>
+        {/if}
       </div>
     </div>
   {:else}

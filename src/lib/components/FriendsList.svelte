@@ -1,19 +1,7 @@
-<script context="module" lang="ts">
-  export interface Friend {
-    peerId?: string;
-    scratchpadAddress?: string;
-    displayName: string;
-    isConnected: boolean;
-    unreadCount: number;
-    isLoadingScratchpad?: boolean;
-    scratchpadError?: boolean;
-    targetProfileId?: string; // Profile-ID des Freundes (für Freundschaftsanfragen)
-  }
-</script>
-
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { translations } from '../i18n/translations';
+  import type { Friend } from '../types';
   
   export let friends: Friend[] = [];
   export let selectedFriendId: string | null = null;
@@ -94,7 +82,7 @@
         
         <div class="friend-status">
           <span class="status-dot" class:connected={friend.isConnected}></span>
-          {#if friend.unreadCount > 0}
+          {#if (friend.unreadCount ?? 0) > 0}
             <span class="unread-count">{friend.unreadCount}</span>
           {/if}
           <button

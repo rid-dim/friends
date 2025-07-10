@@ -48,7 +48,9 @@ export type TranslationKey =
   | 'fileTooLarge'
   | 'theme'
   | 'lightMode'
-  | 'darkMode';
+  | 'darkMode'
+  | 'welcome'
+  | 'noFriendSelected';
 
 // Definiere den Typ für die Sprachen
 export type Language = 'en' | 'de' | 'fr' | 'es' | 'bg' | 'ja' | 'ko' | 'zh';
@@ -113,7 +115,9 @@ export const translations: Translations = {
     fileTooLarge: 'File is too large. Maximum size: ',
     theme: 'Theme',
     lightMode: 'Light Mode',
-    darkMode: 'Dark Mode'
+    darkMode: 'Dark Mode',
+    welcome: 'Welcome to P2P Chat!',
+    noFriendSelected: 'Select a friend on the left to start chatting.'
   },
   
   // Deutsch
@@ -167,7 +171,9 @@ export const translations: Translations = {
     fileTooLarge: 'Datei ist zu groß. Maximale Größe: ',
     theme: 'Thema',
     lightMode: 'Heller Modus',
-    darkMode: 'Dunkler Modus'
+    darkMode: 'Dunkler Modus',
+    welcome: 'Willkommen bei P2P Chat!',
+    noFriendSelected: 'Wähle links einen Freund aus, um den Chat zu starten.'  
   },
   
   // Französisch
@@ -221,7 +227,9 @@ export const translations: Translations = {
     fileTooLarge: 'Le fichier est trop volumineux. Taille maximale: ',
     theme: 'Thème',
     lightMode: 'Mode clair',
-    darkMode: 'Mode sombre'
+    darkMode: 'Mode sombre',
+    welcome: '',
+    noFriendSelected: ''
   },
   
   // Spanisch
@@ -275,7 +283,9 @@ export const translations: Translations = {
     fileTooLarge: 'El archivo es demasiado grande. Tamaño máximo: ',
     theme: 'Tema',
     lightMode: 'Modo claro',
-    darkMode: 'Modo oscuro'
+    darkMode: 'Modo oscuro',
+    welcome: '',
+    noFriendSelected: ''
   },
   
   // Bulgarisch
@@ -329,7 +339,9 @@ export const translations: Translations = {
     fileTooLarge: 'Файлът е прекалено голям. Максимален размер: ',
     theme: 'Тема',
     lightMode: 'Светъл режим',
-    darkMode: 'Тъмрен режим'
+    darkMode: 'Тъмрен режим',
+    welcome: '',
+    noFriendSelected: ''
   },
   
   // Japanisch
@@ -383,7 +395,9 @@ export const translations: Translations = {
     fileTooLarge: 'ファイルが大きすぎます。最大サイズ: ',
     theme: 'テーマ',
     lightMode: 'ライトモード',
-    darkMode: 'ダークモード'
+    darkMode: 'ダークモード',
+    welcome: '',
+    noFriendSelected: ''
   },
   
   // Koreanisch
@@ -437,7 +451,9 @@ export const translations: Translations = {
     fileTooLarge: '파일이 너무 큽니다. 최대 크기: ',
     theme: '테마',
     lightMode: '라이트 모드',
-    darkMode: '다크 모드'
+    darkMode: '다크 모드',
+    welcome: '',
+    noFriendSelected: ''
   },
   
   // Mandarin
@@ -491,7 +507,9 @@ export const translations: Translations = {
     fileTooLarge: '文件太大。最大大小: ',
     theme: '主题',
     lightMode: '亮模式',
-    darkMode: '暗模式'
+    darkMode: '暗模式',
+    welcome: '',
+    noFriendSelected: ''
   }
 };
 

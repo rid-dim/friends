@@ -54,24 +54,32 @@
 
 <style>
   .status-bar {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(100px, auto) 1fr minmax(100px, auto);
     align-items: center;
+    gap: 1rem;
     padding: 1rem;
     background: var(--foreground-color1);
     border-bottom: 1px solid var(--line-color);
+    width: 100%;
+    box-sizing: border-box;
   }
   
   .username-container {
-    min-width: 200px;
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: auto;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   
   .username {
     font-weight: 600;
     color: var(--text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   .settings-button {
@@ -95,15 +103,18 @@
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    text-align: center;
+    justify-self: center;
   }
   
   .status-info {
     display: flex;
-    gap: 2rem;
+    gap: 1rem;
     font-size: 0.9rem;
+    justify-self: end;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
   }
   
   .connection-status,
@@ -112,6 +123,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    white-space: nowrap;
   }
   
   .label {
@@ -128,5 +140,53 @@
     padding: 0.125rem 0.375rem;
     border-radius: 4px;
     font-size: 0.85rem;
+  }
+
+  @media (max-width: 980px) {
+    .status-info {
+      font-size: 0.8rem;
+      gap: 0.75rem;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .status-bar {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto auto;
+      gap: 0.5rem;
+      padding: 0.75rem;
+    }
+    
+    .username-container {
+      justify-self: center;
+      order: 2;
+    }
+    
+    h1 {
+      order: 1;
+      margin-bottom: 0.5rem;
+    }
+    
+    .status-info {
+      justify-self: center;
+      order: 3;
+      margin-top: 0.5rem;
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .status-info {
+      flex-direction: column;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    
+    .connection-status,
+    .handshake-status,
+    .notification-status {
+      justify-content: center;
+    }
   }
 </style> 
