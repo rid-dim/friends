@@ -30,11 +30,9 @@ export class FriendRequestManager {
     this.profileId = profileId;
   }
   
-  // Generate SHA256 hash for object name
+  // Generate object name from profileId
   private generateObjectName(profileId: string): string {
-    // In browser environment, we'll use Web Crypto API
-    // This will be called from Svelte component where we have access to browser APIs
-    return ''; // Placeholder - will be implemented in browser
+    return profileId;
   }
   
   // Convert JSON to byte array
@@ -68,7 +66,7 @@ export class FriendRequestManager {
   async updateOwnProfile(username: string, profileImage?: string): Promise<boolean> {
     try {
       // Generate object name for friend request scratchpad
-      const objectName = await this.generateObjectNameAsync(this.profileId);
+      const objectName = this.generateObjectName(this.profileId);
       
       const profileData: ProfileData = {
         accountname: username,
@@ -184,7 +182,7 @@ export class FriendRequestManager {
       }
       
       if (chunk && chunk.unencrypted_data && Array.isArray(chunk.unencrypted_data)) {
-        const requests = this.byteArrayToJson(chunk.unencrypted_data);
+        const requests: FriendRequest[] = this.byteArrayToJson(chunk.unencrypted_data);
         return Array.isArray(requests) ? requests : [];
       }
       
@@ -197,6 +195,11 @@ export class FriendRequestManager {
   
   // Send friend request
   async sendFriendRequest(targetProfileId: string, myPeerId: string): Promise<boolean> {
+    // Verhindere, dass man sich selbst eine Freundschaftsanfrage schickt
+    if (targetProfileId === this.profileId) {
+      console.warn('⚠️ Freundschaftsanfrage an die eigene ProfileId abgebrochen.');
+      return false;
+    }
     try {
       // First read the target profile to get friend request scratchpad info
       const targetProfile = await this.readProfile(targetProfileId);
@@ -312,26 +315,61 @@ export class FriendRequestManager {
       return false;
     }
   }
-  
+
+  // Hilfsmethode zum Schreiben von Friend-Request-Listen
+  private async writeFriendRequests(objectName: string, ownerSecret: string, requests: FriendRequest[]): Promise<boolean> {
+    try {
+      const requestsJson = JSON.stringify(requests);
+      const requestsBytes = this.jsonToByteArray(requestsJson);
+
+      const scratchpadPayload = {
+        counter: 0,
+        data_encoding: 0,
+        dweb_type: "PublicScratchpad",
+        encrypted_data: [0],
+        scratchpad_address: "string",
+        unencrypted_data: requestsBytes
+      };
+
+      const response = await fetch(this.buildFriendRequestUrl(objectName), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Ant-App-ID': 'friends',
+          'Ant-Owner-Secret': ownerSecret
+        },
+        body: JSON.stringify(scratchpadPayload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Fehler beim Schreiben der Friend-Request-Liste:', error);
+      return false;
+    }
+  }
+
   // Check own friend requests
   async checkOwnFriendRequests(): Promise<FriendRequest[]> {
     try {
-      const objectName = await this.generateObjectNameAsync(this.profileId);
+      const objectName = this.generateObjectName(this.profileId);
       const requests = await this.readFriendRequests(objectName, FriendRequestManager.FRIEND_REQUEST_OWNER_SECRET);
-      return requests;
+
+      // Entferne Einträge, die von uns selbst stammen
+      const cleanedRequests = requests.filter(r => r.profileId !== this.profileId);
+
+      if (cleanedRequests.length !== requests.length) {
+        await this.writeFriendRequests(objectName, FriendRequestManager.FRIEND_REQUEST_OWNER_SECRET, cleanedRequests);
+        console.log('🧹 Eigene Freundschaftsanfrage aus Scratchpad entfernt');
+      }
+
+      return cleanedRequests;
     } catch (error) {
       console.error('❌ Error checking own friend requests:', error);
       return [];
     }
-  }
-  
-  // Generate object name using Web Crypto API (async)
-  async generateObjectNameAsync(profileId: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(profileId);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
   }
 } 

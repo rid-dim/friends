@@ -19,6 +19,14 @@
   }
   let loading = false;
   let error = '';
+  let declineLoading = false;
+
+  function declineRequest() {
+    declineLoading = true;
+    dispatch('decline');
+    declineLoading = false;
+    close();
+  }
   
   async function acceptRequest() {
     if (!displayName.trim()) {
@@ -39,6 +47,8 @@
   function close() {
     dispatch('close');
   }
+
+  $: declineLabel = language === 'de' ? 'Ablehnen' : 'Decline';
 </script>
 
 <div class="modal-overlay" on:click|self={close}>
@@ -86,6 +96,9 @@
       <div class="modal-buttons">
         <button on:click={close} class="secondary-button">
           {t.cancel}
+        </button>
+        <button on:click={declineRequest} class="danger-button">
+          {declineLoading ? t.loading : declineLabel}
         </button>
         <button 
           on:click={acceptRequest} 
@@ -265,5 +278,10 @@
   .primary-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .danger-button {
+    background: var(--notification-color);
+    color: white;
   }
 </style> 

@@ -38,25 +38,25 @@ export class SinglePeerConnection {
     attachment: FileAttachment
   }> = new Map();
   private backendUrl: string;
-  private accountName: string;
-  private friendName: string;
+  private myProfileId: string;
+  private friendProfileId: string;
 
-  constructor(peerId: string, events: ConnectionEvents, 
-    myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', accountName: string = '', friendName: string = '') {
+  constructor(peerId: string, events: ConnectionEvents,
+    myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', myProfileId: string = '', friendProfileId: string = '') {
     this.peerId = peerId;
     this.events = events;
     this.backendUrl = backendUrl;
-    this.accountName = accountName;
+    this.myProfileId = myProfileId;
     // Verwende den übergebenen friendName oder fallback auf peerId
-    this.friendName = friendName || peerId;
+    this.friendProfileId = friendProfileId || peerId;
     
     console.log(`[${this.peerId}] Creating smokesigns Link with DwebConnector:`, { 
       readAddress: peerAddress,
       writeAddress: myAddress,
       priority,
       backendUrl: backendUrl || '',
-      accountName: accountName || '',
-      friendName: this.friendName
+      accountName: myProfileId || '',
+      friendName: this.friendProfileId
     });
     
     // Create smokesigns link
@@ -68,7 +68,7 @@ export class SinglePeerConnection {
       // Create dweb connector for scratchpad-based handshake
       // Format: {friendName}comm{accountName} - konsistent mit buildFriendScratchpadUrl in App.svelte
       // Wir verwenden den tatsächlichen friendName (display name)
-      const objectName = this.accountName ? `${this.friendName}comm${this.accountName}` : `${this.friendName}comm`;
+      const objectName = `${this.friendProfileId}comm${this.myProfileId}`;
       
       const connector = new DwebConnector({
         backendUrl: this.backendUrl, // Use the backend URL from query parameter
@@ -81,7 +81,7 @@ export class SinglePeerConnection {
         writeTuple: ['friends', objectName],
         readScratchpadAddress: peerAddress.substring(0, 8) + '...',
         priority,
-        objectNameFormat: `${this.friendName}comm${this.accountName || ''}`
+        objectNameFormat: `${this.friendProfileId}comm${this.myProfileId || ''}`
       });
 
       // Create link
@@ -760,23 +760,22 @@ export class ConnectionManager {
   /**
    * Create a new connection using the smokesigns library
    */
-  createConnectionUsingSigns(peerId: string, myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', accountName: string = '', friendName: string = ''): SinglePeerConnection {
+  createConnectionUsingSigns(peerId: string, myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', myProfileId: string = '', friendProfileId: string = ''): SinglePeerConnection {
     // Close existing connection if any
     this.closeConnection(peerId);
     
-    const connection = new SinglePeerConnection(
-      peerId, 
-      this.events, 
-      myAddress, 
+    const conn = new SinglePeerConnection(
+      peerId,
+      this.events,
+      myAddress,
       peerAddress,
       priority,
       backendUrl,
-      accountName,
-      friendName
+      myProfileId,
+      friendProfileId
     );
-    
-    this.connections.set(peerId, connection);
-    return connection;
+    this.connections.set(peerId, conn);
+    return conn;
   }
   
   closeConnection(peerId: string) {

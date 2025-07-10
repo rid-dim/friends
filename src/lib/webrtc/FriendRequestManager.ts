@@ -399,6 +399,11 @@ export class FriendRequestManager {
 
   // Send friend request
   async sendFriendRequest(targetProfileId: string, myHandshakeAddress: string, displayName?: string): Promise<boolean> {
+    // Do not send request to self
+    if (targetProfileId === this.profileId) {
+      console.warn('Attempted to send friend request to self, aborted.');
+      return false;
+    }
     try {
       // Read target profile
       const targetProfile = await this.readProfile(targetProfileId);

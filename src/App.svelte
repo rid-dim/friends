@@ -203,15 +203,18 @@
   }
   
   // Build friend-specific scratchpad URL
-  function buildFriendScratchpadUrl(friendName: string): string {
-    const objectName = accountName ? `${friendName}comm${accountName}` : `${friendName}comm`;
+  function buildFriendScratchpadUrl(friendProfileId: string): string {
+    if (!profileId) {
+      throw new Error('profileId not initialised yet');
+    }
+    const objectName = `${friendProfileId}comm${profileId}`;
     const baseUrl = backendUrl ? `${backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
     return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
   }
   
   // Create or get friend scratchpad
-  async function createOrGetFriendScratchpad(friendName: string): Promise<string> {
-    const url = buildFriendScratchpadUrl(friendName);
+  async function createOrGetFriendScratchpad(friendProfileId: string): Promise<string> {
+    const url = buildFriendScratchpadUrl(friendProfileId);
     console.log('🌐 Creating/getting friend scratchpad:', url);
     
     try {
@@ -246,7 +249,7 @@
         // Create new scratchpad
         const friendInfo = {
           type: 'friend-communication',
-          friendName: friendName,
+          friendProfileId: friendProfileId,
           createdAt: new Date().toISOString(),
           accountName: accountName || null
         };
@@ -550,12 +553,12 @@
           console.log('✅ Successfully loaded account package:', accountPackage);
           
           // Check version and migrate if needed
-          if (!accountPackage.version || accountPackage.version < 2) {
-            console.log(`🔄 Migrating account package from version ${accountPackage.version || 0} to version 2`);
-            // Remove all friends as they need to be recreated with new scratchpad approach
+          if (!accountPackage.version || accountPackage.version < 3) {
+            console.log(`🔄 Migrating account package from version ${accountPackage.version || 0} to version 3`);
+            // Entferne alle bestehenden Freunde, da ab Version 3 die profileId als eindeutiger Schlüssel verwendet wird
             accountPackage.friends = [];
-            accountPackage.version = 2;
-            showNotification('Account package upgraded. Please re-add your friends.');
+            accountPackage.version = 3;
+            showNotification('Account package wurde aktualisiert. Bitte füge deine Freunde erneut hinzu.');
           }
           
           return accountPackage as AccountPackage;
@@ -781,7 +784,7 @@
     sessionStartTimestamp = Date.now();
     
     const accountData: AccountPackage = {
-      version: 2, // Version 2 of the account package format
+      version: 3, // Version 3 of the account package format (profileId als eindeutiger Schlüssel für Freunde)
       username: accountCreationForm.username.trim(),
       profileImage: accountCreationForm.profileImage.trim() || undefined,
       themeUrl: accountCreationForm.themeUrl.trim() || 'default',
@@ -1627,12 +1630,12 @@
       // Create new connection using smokesigns integration with DwebConnector
       connectionManager.createConnectionUsingSigns(
         peerId,
-        myAddress,  // My address (write to)
-        peerId,     // Their address (read from)
-        isHighPriority, // Priority based on ID comparison
-        backendUrl, // Backend URL from query parameter
-        accountName, // Account name from query parameter
-        friend.displayName // Tatsächlicher Anzeigename des Freundes
+        myAddress, // my write address
+        peerId,    // their read address
+        isHighPriority,
+        backendUrl,
+        profileId, // my profileId
+        friend.targetProfileId || '' // their profileId
       );
       
       // Für Debugging-Zwecke: Füge einen Timeout hinzu, der nach 35 Sekunden prüft, ob die Verbindung erfolgreich war
@@ -1708,7 +1711,7 @@
     
     try {
       // Create or get friend scratchpad for handshake
-      const scratchpadAddress = await createOrGetFriendScratchpad(displayName);
+      const scratchpadAddress = await createOrGetFriendScratchpad(profileId);
       
       // Send friend request with handshake address
       await friendRequestManager.sendFriendRequest(profileId, scratchpadAddress, displayName);
@@ -1806,7 +1809,7 @@
     
     try {
       // Create or get friend scratchpad for handshake
-      const scratchpadAddress = await createOrGetFriendScratchpad(displayName);
+      const scratchpadAddress = await createOrGetFriendScratchpad(currentRequest.profileId);
       
       // Send approval with our handshake address
       await friendRequestManager.acceptFriendRequest(currentRequest.profileId, scratchpadAddress);
@@ -1864,7 +1867,7 @@
       await friendRequestManager.removeProcessedRequest(currentRequest.profileId);
       
       // Remove from pending requests
-      pendingFriendRequests = pendingFriendRequests.filter(r => r.request !== currentRequest.request);
+      pendingFriendRequests = pendingFriendRequests.filter(r => !(r.profileId === currentRequest.profileId && r.time === currentRequest.time));
       
       showNotification('Friend request accepted');
       handleCloseProfileModal();
@@ -1957,7 +1960,7 @@
             }
 
             // Erstelle/ermittle eigenes Scratchpad für diesen Freund
-            scratchpadAddress = await createOrGetFriendScratchpad(displayName);
+            scratchpadAddress = await createOrGetFriendScratchpad(approval.profileId);
 
             const newFriend: Friend = {
               peerId: approval.approval,
@@ -2018,6 +2021,36 @@
       }
     } catch (error) {
       console.error('Error checking friend requests:', error);
+    }
+  }
+
+  async function handleDeclineFriendRequest() {
+    if (!friendRequestManager || !selectedFriendRequest) return;
+    try {
+      await friendRequestManager.removeProcessedRequest(selectedFriendRequest.profileId);
+      pendingFriendRequests = pendingFriendRequests.filter(r => !(r.profileId === selectedFriendRequest.profileId && r.time === selectedFriendRequest.time));
+      showNotification('Friend request declined');
+    } catch (error) {
+      console.error('Error declining friend request:', error);
+      showNotification('Error declining request');
+    } finally {
+      handleCloseProfileModal();
+    }
+  }
+
+  // Add handler function near others
+  function handleRenameFriend(event: CustomEvent<{newName: string}>) {
+    const { newName } = event.detail;
+    if (!selectedFriend) return;
+    const friendIndex = friends.findIndex(f => f === selectedFriend);
+    if (friendIndex !== -1) {
+      friends[friendIndex] = { ...friends[friendIndex], displayName: newName };
+      friends = [...friends];
+      // Update selection id if using displayName key
+      if (!selectedFriend.peerId) {
+        selectedFriendId = newName;
+      }
+      saveFriends();
     }
   }
 </script>
@@ -2160,6 +2193,7 @@
         on:sendMessage={handleSendMessage}
         on:notification={(e) => showNotification(e.detail)}
         on:updatePeerId={handleUpdatePeerId}
+        on:renameFriend={handleRenameFriend}
       />
               </div>
                 </div>
@@ -2316,6 +2350,7 @@
       {friendRequestManager}
       {language}
       on:close={handleCloseProfileModal}
+      on:decline={handleDeclineFriendRequest}
       on:accept={handleAcceptFriendRequest}
     />
   {/if}

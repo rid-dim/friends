@@ -4,7 +4,11 @@
   import AttachmentView from '../file-handling/AttachmentView.svelte';
   import FileUploader from '../file-handling/FileUploader.svelte';
   import type { FileAttachment } from '../file-handling/types';
-  
+  import type { Friend } from '../types';
+  import { onMount } from 'svelte';
+  import { tick } from 'svelte';
+
+  export let friend: Friend | undefined = undefined;
   export let messages: Array<{
     nick: string;
     text: string;
@@ -29,7 +33,9 @@
   let messagesContainer: HTMLDivElement;
   let showPeerIdInput = false;
   let newPeerId = '';
-  
+  let isEditingName = false;
+  let editedName = '';
+
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -97,72 +103,85 @@
   }
   
   $: t = translations[language];
+  $: welcomeTitle = language === 'de' ? 'Willkommen!' : 'Welcome!';
+  $: welcomeTip = language === 'de' ? '⬅️  Füge links über "+ Freund" neue Kontakte hinzu' : '⬅️  Use "+ Add Friend" on the left to add contacts';
+
+  function editDisplayName() {
+    dispatch('editDisplayName');
+  }
+
+  function startEdit() {
+    if (!friendName) return;
+    editedName = friendName;
+    isEditingName = true;
+    tick().then(() => {
+      const input = document.getElementById('editNameInput') as HTMLInputElement;
+      input?.focus();
+    });
+  }
+
+  function saveName() {
+    const newName = editedName.trim();
+    if (newName && newName !== friendName) {
+      dispatch('renameFriend', { newName });
+    }
+    isEditingName = false;
+  }
+
+  function handleNameInputKey(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveName();
+    } else if (event.key === 'Escape') {
+      isEditingName = false;
+    }
+  }
 </script>
 
 <div class="chat">
-  <div class="chat-header">
-    <div class="friend-info">
-      <h2>{friendName || t.selectFriend}</h2>
-      {#if friendName}
-        {#if isLoadingScratchpad}
-          <div class="loading-scratchpad">
-            <div class="small-spinner"></div>
-            <span>Creating communication channel...</span>
-          </div>
-        {:else if scratchpadError}
-          <div class="scratchpad-error">
-            <span>Error creating communication channel</span>
-          </div>
-        {:else if friendScratchpadAddress}
-          <div class="friend-contact-id">
-            <span class="label">Contact ID to share with {friendName}:</span>
-            <button class="peer-id" on:click={() => copyPeerId(friendScratchpadAddress)} title="Click to copy">
-              {friendScratchpadAddress.slice(0, 8)}...
-            </button>
-          </div>
+  {#if friendName}
+    <div class="chat-header">
+      {#if friend?.profileImage}
+        <img class="friend-avatar" src={friend.profileImage} alt={friend.displayName ?? ''} />
+      {:else}
+        <div class="friend-avatar placeholder">
+          {friendName.charAt(0).toUpperCase()}
+        </div>
+      {/if}
+      <div class="header-main">
+        <div class="name-row">
+          {#if isEditingName}
+            <input id="editNameInput" bind:value={editedName} class="name-input" on:keydown={handleNameInputKey} />
+            <button class="save-btn" title="Save" on:click={saveName}>✓</button>
+          {:else}
+            <h2>{friend?.displayName || friendName}</h2>
+            <button class="edit-btn" on:click={startEdit} title="Edit">✏️</button>
+          {/if}
+        </div>
+        <div class="contact-info">
+          {#if friendScratchpadAddress}
+            <div class="friend-contact-id">
+              <span class="label">Contact ID shared with {friendName}:</span>
+              <button class="peer-id" on:click={() => copyPeerId(friendScratchpadAddress)}>{friendScratchpadAddress.slice(0, 8)}...</button>
+            </div>
+          {/if}
           {#if friendPeerId}
             <div class="friend-peer-id">
               <span class="label">{friendName}'s Contact ID shared with us:</span>
-              <button class="peer-id" on:click={() => copyPeerId(friendPeerId)} title="Click to copy">
-                {friendPeerId.slice(0, 8)}...
-              </button>
+              <button class="peer-id" on:click={() => copyPeerId(friendPeerId)}>{friendPeerId.slice(0, 8)}...</button>
             </div>
-          {:else}
-            {#if !showPeerIdInput}
-              <button class="add-peer-id" on:click={() => showPeerIdInput = true} title="Add friend's contact ID">
-                + Add Contact ID
-              </button>
-            {/if}
-            {#if showPeerIdInput}
-              <div class="peer-id-input">
-                <input
-                  type="text"
-                  bind:value={newPeerId}
-                  placeholder="Enter friend's contact ID"
-                />
-                <button on:click={() => {
-                  if (newPeerId.trim()) {
-                    dispatch('updatePeerId', { peerId: newPeerId.trim() });
-                    showPeerIdInput = false;
-                    newPeerId = '';
-                  }
-                }}>Save</button>
-                <button on:click={() => {
-                  showPeerIdInput = false;
-                  newPeerId = '';
-                }}>Cancel</button>
-              </div>
-            {/if}
           {/if}
-        {/if}
-      {/if}
+        </div>
+      </div>
     </div>
-    <div class="connection-indicator">
-      <span class="status-dot" class:connected={isConnected}></span>
-      <span>{isConnected ? t.connected : t.notConnected}</span>
+  {:else}
+    <div class="welcome-screen">
+      <h2>{welcomeTitle}</h2>
+      <p>{welcomeTip}</p>
     </div>
-  </div>
+  {/if}
   
+  {#if friendName}
   <div class="messages" bind:this={messagesContainer}>
     {#if messages.length === 0}
       <div class="empty-chat">
@@ -190,7 +209,9 @@
       {/each}
     {/if}
   </div>
+  {/if}
   
+  {#if friendName}
   <div class="input-area">
     <div class="input-row">
       <textarea
@@ -229,6 +250,7 @@
       </div>
     </div>
   </div>
+  {/if}
 </div>
 
 <style>
@@ -559,4 +581,75 @@
     font-size: 0.8rem;
     color: var(--notification-color);
   }
+
+  .welcome-screen {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    color: var(--foreground-color2);
+    text-align: center;
+    gap: 1rem;
+  }
+
+  .friend-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 1rem;
+  }
+  .friend-avatar.placeholder {
+    background: var(--foreground-color2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: var(--text-color);
+  }
+  .header-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .name-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .edit-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color);
+    font-size: 1rem;
+    padding: 0;
+  }
+  .edit-btn:hover {
+    opacity: 0.8;
+  }
+  .contact-info {
+    font-size: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .name-input {
+    font-size: 1.1rem;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--line-color);
+    border-radius: 4px;
+    background: var(--background-color);
+    color: inherit;
+  }
+  .save-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-color);
+    font-size: 1.2rem;
+  }
+  .save-btn:hover { opacity:0.8; }
 </style> 

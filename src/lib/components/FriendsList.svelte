@@ -63,7 +63,7 @@
   -->
   
   <div class="friends">
-    {#each friends as friend (friend.displayName)}
+    {#each friends as friend (friend.targetProfileId || friend.displayName)}
       <div
         class="friend"
         class:selected={selectedFriendId === friend.peerId || selectedFriendId === friend.displayName}
