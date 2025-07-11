@@ -2252,7 +2252,7 @@
           language={language}
           debug={debugMode}
           backendUrl={backendUrl}
-          on:message={handleSendMessage}
+          on:sendMessage={handleSendMessage}
           on:updatePeerId={handleUpdatePeerId}
           on:renameFriend={handleRenameFriend}
         />

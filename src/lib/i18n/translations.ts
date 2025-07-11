@@ -73,7 +73,9 @@ export const translations = {
     // Session management
     sessionTransferred: 'Session transferred to new app instance',
     sessionDeactivatedMessage: 'This app instance has been deactivated because another instance was opened.',
-    reload: 'Reload'
+    reload: 'Reload',
+    welcome: 'Welcome to P2P Chat!',
+    noFriendSelected: 'Select a friend on the left to start chatting.'
   },
   de: {
     // Account settings
@@ -149,7 +151,9 @@ export const translations = {
     // Session management
     sessionTransferred: 'Session zu neuer App-Instanz übertragen',
     sessionDeactivatedMessage: 'Diese App-Instanz wurde deaktiviert, da eine andere Instanz geöffnet wurde.',
-    reload: 'Neu laden'
+    reload: 'Neu laden',
+    welcome: 'Willkommen bei P2P Chat!',
+    noFriendSelected: 'Wähle links einen Freund aus, um zu chatten.'
   },
   fr: {
     // Account settings
