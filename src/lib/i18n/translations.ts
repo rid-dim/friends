@@ -14,6 +14,16 @@ export const translations = {
     publicIdentifierAdded: 'Public identifier added',
     publicNameTaken: 'Public name already taken - please use a different name',
     
+    // Account creation wizard
+    createFriendsAccount: 'Create Friends Account',
+    finishAccountCreation: 'Finish Account Creation',
+    chooseDisplayName: 'Choose your display name',
+    setProfileImageOptional: 'You can set a profile image here (optional)',
+    choosePublicIdentifierOptional: 'Choose searchable public identifier (optional)',
+    waitingProfileInitialization: 'Please wait while profile is being initialized',
+    creatingPublicIdentifier: 'Creating public identifier...',
+    noAccountPackageFoundQuestion: 'No account package found. Would you like to create one?',
+    
     settingsUpdated: 'Settings updated successfully',
     
     // Friends
@@ -100,6 +110,16 @@ export const translations = {
     enterPublicIdentifier: 'Öffentlichen Namen eingeben',
     publicIdentifierAdded: 'Öffentlicher Name hinzugefügt',
     publicNameTaken: 'Öffentlicher Name bereits vergeben - bitte einen anderen wählen',
+
+    // Account creation wizard
+    createFriendsAccount: 'Friends-Konto erstellen',
+    finishAccountCreation: 'Kontoeinrichtung abschließen',
+    chooseDisplayName: 'Wähle deinen Anzeigenamen',
+    setProfileImageOptional: 'Du kannst hier ein Profilbild einstellen (optional)',
+    choosePublicIdentifierOptional: 'Wähle einen öffentlich suchbaren Namen (optional)',
+    waitingProfileInitialization: 'Bitte warten, Profil wird initialisiert',
+    creatingPublicIdentifier: 'Öffentlicher Name wird erstellt...',
+    noAccountPackageFoundQuestion: 'Kein Account-Paket gefunden. Möchtest du eines erstellen?',
 
     settingsUpdated: 'Einstellungen erfolgreich aktualisiert',
     

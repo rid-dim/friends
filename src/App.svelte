@@ -11,6 +11,7 @@
   import FriendRequestModal from './lib/components/FriendRequestModal.svelte';
   import FriendRequestNotification from './lib/components/FriendRequestNotification.svelte';
   import ProfileModal from './lib/components/ProfileModal.svelte';
+  import AccountCreationWizard from './lib/components/AccountCreationWizard.svelte';
   
   // Import WebRTC and file handling
   import { ConnectionManager } from './lib/webrtc/ConnectionManager';
@@ -496,8 +497,7 @@
       
       // Friend Request Manager initialisieren (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
-        friendRequestManager = new FriendRequestManager(backendUrl, profileId, accountName || accountPackage.username);
-
+        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountPackage.username);
         const ok = await friendRequestManager.initializeProfile();
 
         if (ok) {
@@ -816,10 +816,15 @@
       // Initialize peer communication after account creation
       await initializePeerCommunication();
       
-      // Initialize Friend Request Manager after we have a profileId
-      if (profileId && accountPackage) {
-        friendRequestManager = new FriendRequestManager(backendUrl, profileId, accountName || accountPackage.username);
-        
+      // Initialize Friend Request Manager (erstellt/verifiziert Profil-Scratchpad)
+      if (accountPackage) {
+        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountData.username);
+        const ok = await friendRequestManager.initializeProfile();
+
+        if (ok) {
+          profileId = friendRequestManager.getProfileId();
+        }
+
         // Initialize profile on first run
         await friendRequestManager.initializeProfile();
         
@@ -2118,6 +2123,8 @@
   let showAddPublicIdentifier = false;
   let newPublicIdentifier = '';
   const ANT_OWNER_SECRET = '6e273a3c19d3e908e905dc6537b7cfb9010ca7650a605886029850cef60cd440';
+  // Lader-Status für Public-Identifier-Erstellung im Wizard
+  let publicIdentifierLoading = false;
 
   // Keep publicIdentifiers in sync with account package
   $: if (accountPackage && Array.isArray(accountPackage.publicIdentifiers)) {
@@ -2211,6 +2218,76 @@
       showNotification(t.connectionError);
     }
   }
+
+  /* ================= Account-Creation-Wizard Handler ================= */
+  async function handleWizardStart() {
+    // Session anlegen
+    currentSessionId = generateSessionId();
+    sessionStartTimestamp = Date.now();
+
+    const accountData: AccountPackage = {
+      version: 3,
+      username: 'User',
+      themeUrl: 'default',
+      language,
+      friends: [],
+      activeSession: {
+        sessionId: currentSessionId,
+        timestamp: sessionStartTimestamp
+      }
+    };
+
+    const success = await createAccountPackage(accountData);
+    if (success) {
+      accountPackage = accountData;
+      startSessionMonitoring();
+      await initializePeerCommunication();
+
+      // FriendRequestManager initialisieren (erstellt/verifiziert Profil-Scratchpad)
+      if (accountPackage) {
+        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountData.username);
+        const ok = await friendRequestManager.initializeProfile();
+
+        if (ok) {
+          profileId = friendRequestManager.getProfileId();
+        }
+
+        if (accountPackage.profileImage) {
+          await friendRequestManager.updateProfileImage(accountPackage.profileImage);
+        }
+
+        startFriendRequestCheck();
+      }
+    }
+  }
+
+  async function handleWizardSetDisplayName(e: CustomEvent<string>) {
+    const name = e.detail;
+    if (accountPackage) {
+      await updateAccountPackage({ ...accountPackage, username: name });
+    }
+  }
+
+  async function handleWizardSetProfileImage(e: CustomEvent<string>) {
+    const img = e.detail;
+    if (accountPackage) {
+      const ok = await updateAccountPackage({ ...accountPackage, profileImage: img });
+      if (ok && friendRequestManager && img) {
+        await friendRequestManager.updateProfileImage(img);
+      }
+    }
+  }
+
+  async function handleWizardAddPublicIdentifier(e: CustomEvent<string>) {
+    publicIdentifierLoading = true;
+    await createPublicIdentifier(e.detail);
+    publicIdentifierLoading = false;
+  }
+
+  function handleWizardFinish() {
+    showAccountCreation = false;
+    showNotification(t.settingsUpdated);
+  }
 </script>
 
 <div class="app">
@@ -2224,82 +2301,19 @@
     </div>
   {/if}
 
-  <!-- Account creation modal -->
+  <!-- Account creation wizard -->
   {#if showAccountCreation}
-    <div class="modal-overlay">
-      <div class="modal-content">
-        <h2>Create Account Package</h2>
-        <p>No account package found. Would you like to create one?</p>
-        
-        <form on:submit|preventDefault={handleAccountCreation}>
-          <!-- Show certificate error with clickable link -->
-          {#if accountCreationError.includes('HTTPS certificate error detected')}
-            <div class="certificate-error">
-              <p><strong>🔒 HTTPS Certificate Issue Detected</strong></p>
-              <p>The backend uses a self-signed certificate. Please click the link below to accept it:</p>
-              <a href={backendUrl} target="_blank" rel="noopener noreferrer" class="certificate-link">
-                {backendUrl}
-              </a>
-              <p><small>After accepting the certificate, close this window and try again.</small></p>
-              <div class="modal-buttons">
-                <button type="button" on:click={cancelAccountCreation} class="secondary-button">
-                  Close
-                </button>
-                <button type="button" on:click={() => {
-                  accountCreationError = '';
-                  initializeBackend();
-                }} class="primary-button">
-                  Try Again
-                </button>
-              </div>
-            </div>
-          {:else}
-          <div class="input-group">
-            <label for="create-username">Username</label>
-            <input 
-              id="create-username"
-                type="text"
-              bind:value={accountCreationForm.username}
-              placeholder="Enter your username"
-              required
-              />
-          </div>
-          
-          <div class="input-group">
-              <label for="create-profile-image">Profile Image (optional)</label>
-            <input 
-              id="create-profile-image"
-                type="text"
-              bind:value={accountCreationForm.profileImage}
-                placeholder="Datamap address or URL"
-              />
-          </div>
-          
-          <div class="input-group">
-              <label for="create-theme">Theme</label>
-              <select id="create-theme" bind:value={accountCreationForm.themeUrl}>
-                <option value="default">Default</option>
-              </select>
-          </div>
-          
-            {#if accountCreationError && !accountCreationError.includes('HTTPS')}
-              <div class="error-message">
-                {accountCreationError}
-              </div>
-          {/if}
-          
-          <div class="modal-buttons">
-            <button type="button" on:click={cancelAccountCreation} class="secondary-button">
-              Cancel
-            </button>
-            <button type="submit" class="primary-button" disabled={isLoadingAccountPackage}>
-                Create Account
-            </button>
-          </div>
-          {/if}
-        </form>
-      </div>
-    </div>
+    <AccountCreationWizard
+      {language}
+      incomplete={false}
+      profileInitializing={!profileId}
+      publicIdentifierLoading={publicIdentifierLoading}
+      on:start={handleWizardStart}
+      on:setDisplayName={handleWizardSetDisplayName}
+      on:setProfileImage={handleWizardSetProfileImage}
+      on:addPublicIdentifier={handleWizardAddPublicIdentifier}
+      on:finish={handleWizardFinish}
+    />
   {/if}
 
   <div class="header-container">
