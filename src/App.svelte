@@ -493,21 +493,16 @@
     
     // Initialize peer communication only if session is active
     if (isSessionActive) {
-      await initializePeerCommunication();
-      
-      // Friend Request Manager initialisieren (erstellt/verifiziert Profil-Scratchpad)
+      // initializePeerCommunication entfernt – comm-Scratchpad wird nicht mehr verwendet
       if (accountPackage) {
         friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountPackage.username);
         const ok = await friendRequestManager.initializeProfile();
-
         if (ok) {
           profileId = friendRequestManager.getProfileId();
         }
-
         if (accountPackage.profileImage) {
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
         }
-
         startFriendRequestCheck();
       }
     }
@@ -676,53 +671,6 @@
     }
   }
   
-  // Initialize public scratchpad for peer communication
-  async function initializePeerCommunication(): Promise<void> {
-    const url = buildPublicScratchpadUrl();
-    console.log('🌐 Initializing peer communication:', url);
-    
-    isLoadingPeerId = true;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'accept': 'application/json',
-          'Ant-App-ID': 'friends'
-        }
-      });
-      
-      if (response.ok) {
-        const scratchpadData = await response.json();
-        
-        let chunk = null;
-        if (Array.isArray(scratchpadData) && scratchpadData.length > 0) {
-          chunk = scratchpadData[0];
-        } else if (scratchpadData && scratchpadData.dweb_type === "PublicScratchpad") {
-          chunk = scratchpadData;
-        }
-        
-        // Prüfe beide möglichen Felder: scratchpad_address oder network_address
-        if (chunk) {
-          const address = chunk.scratchpad_address || chunk.network_address;
-          if (address) {
-            profileId = address;
-            console.log('✅ Retrieved profile ID:', profileId);
-          }
-        }
-      } else if (response.status === 404) {
-        // Create new public scratchpad
-        await createPublicScratchpad();
-      }
-    } catch (error) {
-      console.error('❌ Error initializing peer communication:', error);
-      showNotification('Error initializing peer communication');
-    } finally {
-      isLoadingPeerId = false;
-      connectionStatus = 'Ready';
-    }
-  }
-  
   // Create new public scratchpad for peer communication
   async function createPublicScratchpad(): Promise<void> {
     const url = buildPublicScratchpadUrl();
@@ -813,8 +761,7 @@
       // Start session monitoring
       startSessionMonitoring();
       
-      // Initialize peer communication after account creation
-      await initializePeerCommunication();
+      // initializePeerCommunication entfällt – comm-Scratchpad wird nicht mehr verwendet
       
       // Initialize Friend Request Manager (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
@@ -825,15 +772,11 @@
           profileId = friendRequestManager.getProfileId();
         }
 
-        // Initialize profile on first run
-        await friendRequestManager.initializeProfile();
-        
         // Update profile image if available
         if (accountPackage.profileImage) {
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
         }
-        
-        // Start checking for friend requests
+
         startFriendRequestCheck();
       }
     }
@@ -2241,7 +2184,7 @@
     if (success) {
       accountPackage = accountData;
       startSessionMonitoring();
-      await initializePeerCommunication();
+      // initializePeerCommunication entfällt – comm-Scratchpad wird nicht mehr verwendet
 
       // FriendRequestManager initialisieren (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
@@ -2252,6 +2195,7 @@
           profileId = friendRequestManager.getProfileId();
         }
 
+        // Update profile image if available
         if (accountPackage.profileImage) {
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
         }
@@ -2264,7 +2208,14 @@
   async function handleWizardSetDisplayName(e: CustomEvent<string>) {
     const name = e.detail;
     if (accountPackage) {
-      await updateAccountPackage({ ...accountPackage, username: name });
+      const success = await updateAccountPackage({ ...accountPackage, username: name });
+      if (success && friendRequestManager && profileId) {
+        const profile = await friendRequestManager.readProfile(profileId);
+        if (profile) {
+          profile.accountname = name;
+          await friendRequestManager.writeProfile(profile);
+        }
+      }
     }
   }
 
@@ -2286,6 +2237,34 @@
 
   function handleWizardFinish() {
     showAccountCreation = false;
+    showNotification(t.settingsUpdated);
+  }
+
+  // Debounced Display-Name-Speicherung
+  let displayNameDraft = '';
+  let displayNameSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  $: if (accountPackage) {
+    displayNameDraft = accountPackage.username;
+  }
+
+  function scheduleDisplayNameSave(name: string) {
+    if (displayNameSaveTimeout) clearTimeout(displayNameSaveTimeout);
+    displayNameSaveTimeout = setTimeout(() => {
+      saveDisplayName(name.trim());
+    }, 1000);
+  }
+
+  async function saveDisplayName(name: string) {
+    if (!accountPackage || !name || name === accountPackage.username) return;
+    const success = await updateAccountPackage({ ...accountPackage, username: name });
+    if (success && friendRequestManager && profileId) {
+      const profile = await friendRequestManager.readProfile(profileId);
+      if (profile) {
+        profile.accountname = name;
+        await friendRequestManager.writeProfile(profile);
+      }
+    }
     showNotification(t.settingsUpdated);
   }
 </script>
@@ -2412,6 +2391,21 @@
         <button class="close-button" on:click={() => showSettingsModal = false}>×</button>
         
         <div class="settings-container">
+          <!-- Display Name -->
+          <div class="setting-group">
+            <label for="display-name">{t.displayName}</label>
+            <input
+              id="display-name"
+              type="text"
+              placeholder={t.chooseDisplayName}
+              bind:value={displayNameDraft}
+              on:input={(e) => {
+                const input = e.target as HTMLInputElement;
+                scheduleDisplayNameSave(input.value);
+              }}
+            />
+          </div>
+
           <div class="setting-group">
             <label for="profile-image">{t.profileImage}</label>
             <input
