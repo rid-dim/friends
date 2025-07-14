@@ -10,10 +10,50 @@
   const t = translations[language];
   
   let profileId = '';
+  // Stores resolved profile ID (96-char address) after lookup; may differ from user input
+  let resolvedProfileId = '';
   let displayName = '';
   let profileData: ProfileData | null = null;
   let loading = false;
   let error = '';
+
+  // Constant for pointer requests – same as used elsewhere
+  const ANT_OWNER_SECRET = '6e273a3c19d3e908e905dc6537b7cfb9010ca7650a605886029850cef60cd440';
+
+  // Helper to build pointer URL
+  function buildPointerUrl(objectName: string): string {
+    const base = friendRequestManager?.backendUrl ? `${friendRequestManager.backendUrl}/ant-0/pointer` : '/ant-0/pointer';
+    return `${base}?object_name=${encodeURIComponent(objectName)}`;
+  }
+
+  async function resolvePublicIdentifier(identifier: string): Promise<string | null> {
+    try {
+      const url = buildPointerUrl(identifier);
+      const res = await fetch(url, {
+        headers: {
+          accept: 'application/json',
+          'Ant-App-ID': 'friends',
+          'Ant-Owner-Secret': ANT_OWNER_SECRET
+        }
+      });
+
+      if (!res.ok) {
+        return null;
+      }
+
+      const data = await res.json();
+      // If server wraps in array, unwrap
+      const obj = Array.isArray(data) && data.length > 0 ? data[0] : data;
+      const pid = obj?.chunk_target_address || obj?.pointer_target_address || obj?.scratchpad_target_address || '';
+      if (pid.length === 96) {
+        return pid;
+      }
+      return null;
+    } catch (e) {
+      console.error('Error resolving public identifier', e);
+      return null;
+    }
+  }
   
   // Derive backendUrl from manager if available
   $: backendUrl = friendRequestManager?.backendUrl || '';
@@ -33,12 +73,29 @@
       return;
     }
     
+    // Determine whether input is profileId or public identifier
+    const inputVal = profileId.trim();
+    if (inputVal.length !== 96) {
+      loading = true;
+      error = '';
+      profileData = null;
+      const resolved = await resolvePublicIdentifier(inputVal);
+      if (!resolved) {
+        error = t.profileNotFound;
+        loading = false;
+        return;
+      }
+      resolvedProfileId = resolved;
+    } else {
+      resolvedProfileId = inputVal;
+    }
+
     loading = true;
     error = '';
     profileData = null;
     
     try {
-      const data = await friendRequestManager.readProfile(profileId);
+      const data = await friendRequestManager.readProfile(resolvedProfileId);
       if (data) {
         profileData = data;
         displayName = data.accountname;
@@ -65,7 +122,7 @@
     try {
       // Handshake-Adresse wird in App.svelte erstellt, hier nur Event auslösen
       dispatch('friendRequestSent', { 
-        profileId, 
+        profileId: resolvedProfileId, 
         displayName,
         profileData 
       });
@@ -82,6 +139,7 @@
     dispatch('close');
     // Reset form
     profileId = '';
+    resolvedProfileId = '';
     displayName = '';
     profileData = null;
     error = '';
@@ -94,14 +152,15 @@
     <button class="close-button" on:click={close}>×</button>
     
     <div class="form-group">
-      <label for="profile-id">{t.profileId}</label>
+      <label for="profile-id">{t.profileIdOrPublicIdentifier || t.profileId}</label>
       <div class="input-with-button">
         <input
           id="profile-id"
           type="text"
           bind:value={profileId}
-          placeholder={t.enterProfileId}
+          placeholder={t.enterIdOrIdentifier || t.enterProfileId}
           disabled={loading}
+          on:keydown={(e) => e.key === 'Enter' && loadProfile()}
         />
         <button 
           on:click={loadProfile} 
@@ -134,7 +193,9 @@
           {/if}
           <div class="profile-details">
             <p class="account-name">{profileData.accountname}</p>
-            <p class="profile-id-display">{profileId}</p>
+            {#if resolvedProfileId}
+              <p class="profile-id-display">{resolvedProfileId}</p>
+            {/if}
           </div>
         </div>
         

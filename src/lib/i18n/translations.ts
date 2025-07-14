@@ -7,6 +7,13 @@ export const translations = {
     themeUrl: 'Theme URL',
     enterThemeUrl: 'Enter theme URL',
     language: 'Language',
+    
+    // NEW: Public identifier management
+    publicIdentifier: 'Public Identifier',
+    enterPublicIdentifier: 'Enter public identifier',
+    publicIdentifierAdded: 'Public identifier added',
+    publicNameTaken: 'Public name already taken - please use a different name',
+    
     settingsUpdated: 'Settings updated successfully',
     
     // Friends
@@ -21,6 +28,8 @@ export const translations = {
     // Friend Requests
     profileId: 'Profile ID',
     enterProfileId: 'Enter friend\'s Profile ID',
+    profileIdOrPublicIdentifier: 'Profile ID or public identifier',
+    enterIdOrIdentifier: 'Enter Profile ID or public identifier',
     findFriend: 'Find Friend',
     displayName: 'Display Name',
     enterDisplayName: 'Enter display name for this contact',
@@ -85,6 +94,13 @@ export const translations = {
     themeUrl: 'Theme URL',
     enterThemeUrl: 'Theme URL eingeben',
     language: 'Sprache',
+
+    // NEW: Public identifier management
+    publicIdentifier: 'Öffentlicher Name',
+    enterPublicIdentifier: 'Öffentlichen Namen eingeben',
+    publicIdentifierAdded: 'Öffentlicher Name hinzugefügt',
+    publicNameTaken: 'Öffentlicher Name bereits vergeben - bitte einen anderen wählen',
+
     settingsUpdated: 'Einstellungen erfolgreich aktualisiert',
     
     // Friends
@@ -99,6 +115,8 @@ export const translations = {
     // Friend Requests
     profileId: 'Profil-ID',
     enterProfileId: 'Profil-ID des Freundes eingeben',
+    profileIdOrPublicIdentifier: 'Profil-ID oder öffentlicher Name',
+    enterIdOrIdentifier: 'Profil-ID oder öffentlichen Namen eingeben',
     findFriend: 'Freund finden',
     displayName: 'Anzeigename',
     enterDisplayName: 'Anzeigenamen für diesen Kontakt eingeben',
@@ -177,6 +195,8 @@ export const translations = {
     // Friend Requests
     profileId: 'ID de profil',
     enterProfileId: 'Entrer l\'ID de profil de l\'ami',
+    profileIdOrPublicIdentifier: 'ID de profil ou identifiant public',
+    enterIdOrIdentifier: 'Entrer l\'ID de profil ou l\'identifiant public',
     findFriend: 'Trouver un ami',
     displayName: 'Nom d\'affichage',
     enterDisplayName: 'Entrer le nom d\'affichage pour ce contact',
@@ -253,6 +273,8 @@ export const translations = {
     // Friend Requests
     profileId: 'ID de perfil',
     enterProfileId: 'Introducir ID de perfil del amigo',
+    profileIdOrPublicIdentifier: 'ID de perfil o identificador público',
+    enterIdOrIdentifier: 'Introducir ID de perfil o identificador público',
     findFriend: 'Buscar amigo',
     displayName: 'Nombre para mostrar',
     enterDisplayName: 'Introducir nombre para mostrar para este contacto',
@@ -329,6 +351,8 @@ export const translations = {
     // Friend Requests
     profileId: 'Профил ID',
     enterProfileId: 'Въведете Профил ID на приятел',
+    profileIdOrPublicIdentifier: 'Профил ID или публичен идентификатор',
+    enterIdOrIdentifier: 'Въведете Профил ID или публичен идентификатор',
     findFriend: 'Намери приятел',
     displayName: 'Показално име',
     enterDisplayName: 'Въведете показално име за този контакт',
@@ -405,6 +429,8 @@ export const translations = {
     // Friend Requests
     profileId: 'プロフィールID',
     enterProfileId: '友達のプロフィールIDを入力',
+    profileIdOrPublicIdentifier: 'プロフィールIDまたは公開識別子',
+    enterIdOrIdentifier: 'プロフィールIDまたは公開識別子を入力',
     findFriend: '友達を探す',
     displayName: '表示名',
     enterDisplayName: 'この連絡先の表示名を入力',
@@ -481,6 +507,8 @@ export const translations = {
     // Friend Requests
     profileId: '프로필 ID',
     enterProfileId: '친구의 프로필 ID 입력',
+    profileIdOrPublicIdentifier: '프로필 ID 또는 공개 식별자',
+    enterIdOrIdentifier: '프로필 ID 또는 공개 식별자를 입력',
     findFriend: '친구 찾기',
     displayName: '표시 이름',
     enterDisplayName: '이 연락처의 표시 이름을 입력',
@@ -557,6 +585,8 @@ export const translations = {
     // Friend Requests
     profileId: '用户ID',
     enterProfileId: '输入好友的用户ID',
+    profileIdOrPublicIdentifier: '用户ID或公開識別子',
+    enterIdOrIdentifier: '输入用户ID或公開識別子',
     findFriend: '查找好友',
     displayName: '显示名称',
     enterDisplayName: '输入显示名称',

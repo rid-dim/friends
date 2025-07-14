@@ -41,6 +41,7 @@
       sessionId: string;
       timestamp: number; // Unix timestamp in milliseconds
     };
+    publicIdentifiers?: string[];
   }
   
   // Application state
@@ -1188,7 +1189,7 @@
     const { peerId } = event.detail;
     
     // Update the friend's peerId
-    const friendIndex = friends.findIndex(f => f.displayName === selectedFriend.displayName);
+    const friendIndex = friends.findIndex(f => f.displayName === selectedFriend!.displayName);
     if (friendIndex !== -1) {
       friends[friendIndex] = {
         ...friends[friendIndex],
@@ -2111,6 +2112,105 @@
     console.log('Reactive loadProfileImage triggered for', selectedFriend.displayName);
     loadProfileImage(selectedFriend);
   }
+
+  // NEW: Public identifier state
+  let publicIdentifiers: string[] = [];
+  let showAddPublicIdentifier = false;
+  let newPublicIdentifier = '';
+  const ANT_OWNER_SECRET = '6e273a3c19d3e908e905dc6537b7cfb9010ca7650a605886029850cef60cd440';
+
+  // Keep publicIdentifiers in sync with account package
+  $: if (accountPackage && Array.isArray(accountPackage.publicIdentifiers)) {
+    publicIdentifiers = [...accountPackage.publicIdentifiers];
+  }
+
+  // Helper: build pointer URL
+  function buildPointerUrl(objectName: string): string {
+    const baseUrl = backendUrl ? `${backendUrl}/ant-0/pointer` : '/ant-0/pointer';
+    return `${baseUrl}?tries=3&object_name=${encodeURIComponent(objectName)}`;
+  }
+
+  // Create public identifier via pointer POST
+  async function createPublicIdentifier(identifier: string) {
+    if (!identifier || !profileId) {
+      return;
+    }
+
+    const url = buildPointerUrl(identifier);
+    // Build payload string manually to keep huge counter numeric (avoids JS precision loss)
+    const payload = `{
+      "pointer_address": "",
+      "counter": 18446744073709551615,
+      "chunk_target_address": "",
+      "graphentry_target_address": "",
+      "pointer_target_address": "",
+      "scratchpad_target_address": "${profileId}"
+    }`;
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'Content-Type': 'application/json',
+          'Ant-App-ID': 'friends',
+          'Ant-Owner-Secret': ANT_OWNER_SECRET
+        },
+        body: payload
+      });
+
+      if (res.ok && res.status === 201) {
+        publicIdentifiers = [...new Set([...publicIdentifiers, identifier])];
+        // persist
+        if (accountPackage) {
+          await updateAccountPackage({ ...accountPackage, publicIdentifiers });
+        }
+        showNotification(t.publicIdentifierAdded);
+        showAddPublicIdentifier = false;
+        newPublicIdentifier = '';
+      } else if (res.status === 502) {
+        const text = await res.text();
+        if (text.includes('Pointer already exists')) {
+          // Fetch existing pointer to verify owner
+          try {
+            const ptrRes = await fetch(url, {
+              headers: {
+                accept: 'application/json',
+                'Ant-App-ID': 'friends',
+                'Ant-Owner-Secret': ANT_OWNER_SECRET
+              }
+            });
+            if (ptrRes.ok) {
+              const data = await ptrRes.json();
+              const obj = Array.isArray(data) && data.length > 0 ? data[0] : data;
+              const addr = obj?.chunk_target_address || obj?.pointer_target_address || obj?.scratchpad_target_address || '';
+              if (addr === profileId) {
+                // belongs to us – treat as success
+                publicIdentifiers = [...new Set([...publicIdentifiers, identifier])];
+                if (accountPackage) {
+                  await updateAccountPackage({ ...accountPackage, publicIdentifiers });
+                }
+                showNotification(t.publicIdentifierAdded);
+                showAddPublicIdentifier = false;
+                newPublicIdentifier = '';
+                return;
+              }
+            }
+          } catch (e) {
+            console.error('Error verifying existing pointer', e);
+          }
+          showNotification(t.publicNameTaken);
+        } else {
+          showNotification(t.connectionError);
+        }
+      } else {
+        showNotification(t.connectionError);
+      }
+    } catch (err) {
+      console.error('Error creating public identifier', err);
+      showNotification(t.connectionError);
+    }
+  }
 </script>
 
 <div class="app">
@@ -2387,6 +2487,35 @@
               <option value="ko">한국어</option>
               <option value="zh">中文</option>
             </select>
+          </div>
+
+          <!-- NEW: Public Identifier management -->
+          <div class="setting-group">
+            <label>{t.publicIdentifier}</label>
+
+            {#if publicIdentifiers.length > 0}
+              <ul class="public-identifiers">
+                {#each publicIdentifiers as id}
+                  <li>{id}</li>
+                {/each}
+              </ul>
+            {/if}
+
+            {#if showAddPublicIdentifier}
+              <div class="public-id-input">
+                <input
+                  type="text"
+                  placeholder={t.enterPublicIdentifier}
+                  bind:value={newPublicIdentifier}
+                  on:keydown={(e) => e.key === 'Enter' && createPublicIdentifier(newPublicIdentifier)}
+                />
+                <button class="confirm-button" on:click={() => createPublicIdentifier(newPublicIdentifier)} title="Add">✓</button>
+              </div>
+            {/if}
+
+            {#if !showAddPublicIdentifier}
+              <button class="add-button" on:click={() => { showAddPublicIdentifier = true; }} title="+">+</button>
+            {/if}
           </div>
         </div>
         
@@ -2707,5 +2836,52 @@
     align-items: center;
     gap: 0.5rem;
     padding-right: 1rem;
+  }
+
+  .public-identifiers {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .public-identifiers li {
+    background: var(--foreground-color1);
+    padding: 0.25rem 0.5rem;
+    margin-bottom: 0.25rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+
+  .add-button {
+    background: none;
+    border: 1px solid var(--line-color);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .public-id-input {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+
+  .public-id-input input {
+    flex: 1;
+  }
+
+  .confirm-button {
+    background: var(--notification-color);
+    border: none;
+    color: var(--background-color);
+    padding: 0 0.6rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .confirm-button:hover {
+    opacity: 0.85;
   }
 </style> 
