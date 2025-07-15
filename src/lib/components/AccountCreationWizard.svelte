@@ -18,7 +18,8 @@
   let displayName = '';
   let profileImage = '';
   let newPublicIdentifier = '';
-  let addedPublicIdentifiers: string[] = [];
+  // Liste der bereits erfolgreich angelegten Public-Identifier kommt als Prop von außen
+  export let publicIdentifiers: string[] = []; // Wird von App.svelte gereicht
 
   $: t = translations[language];
 
@@ -41,7 +42,7 @@
   function addPublicIdentifier() {
     const id = newPublicIdentifier.trim();
     if (!id) return;
-    addedPublicIdentifiers = [...addedPublicIdentifiers, id];
+    // Änderung wird erst nach erfolgreichem Backend-Aufruf in publicIdentifiers auftauchen
     dispatch('addPublicIdentifier', id);
     newPublicIdentifier = '';
   }
@@ -150,6 +151,13 @@
         <div class="spinner" title={t.waitingProfileInitialization}></div>
         <p style="text-align:center">{t.waitingProfileInitialization}</p>
       {:else}
+        {#if publicIdentifiers.length > 0}
+          <ul style="margin:0 0 1rem 0; padding-left:1rem; max-height:120px; overflow:auto">
+            {#each publicIdentifiers as id}
+              <li>{id}</li>
+            {/each}
+          </ul>
+        {/if}
         <div class="input-group">
           <input type="text" bind:value={newPublicIdentifier} placeholder={t.enterPublicIdentifier} on:keydown={(e)=> e.key==='Enter' && addPublicIdentifier()} />
         </div>

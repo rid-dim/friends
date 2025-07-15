@@ -460,8 +460,14 @@ export class FriendRequestManager {
   // Check for pending friend requests
   async checkPendingRequests(): Promise<FriendRequest[]> {
     try {
-      // Generate object name for my friend request scratchpad (Hash des Profil-Object-Namens)
-      const objectName = await this.sha256(this.profileObjectName);
+      // Profil lesen, um korrekten Object-Namen zu erhalten
+      const profile = await this.readProfile(this.profileId);
+      if (!profile || !profile['friend-request-scratchpad']) {
+        console.warn('⚠️ Kein gültiges Profil oder Friend-Request-Scratchpad gefunden');
+        return [];
+      }
+      
+      const objectName = profile['friend-request-scratchpad'].object_name;
       
       // Read all requests
       const allRequests = await this.readFriendRequests(objectName, this.antOwnerSecret);
@@ -477,8 +483,14 @@ export class FriendRequestManager {
   // Check for received approvals
   async checkReceivedApprovals(): Promise<FriendRequest[]> {
     try {
-      // Generate object name for my friend request scratchpad
-      const objectName = await this.sha256(this.profileObjectName);
+      // Profil lesen, um korrekten Object-Namen zu erhalten
+      const profile = await this.readProfile(this.profileId);
+      if (!profile || !profile['friend-request-scratchpad']) {
+        console.warn('⚠️ Kein gültiges Profil oder Friend-Request-Scratchpad gefunden');
+        return [];
+      }
+      
+      const objectName = profile['friend-request-scratchpad'].object_name;
       
       // Read all requests
       const allRequests = await this.readFriendRequests(objectName, this.antOwnerSecret);
@@ -494,8 +506,14 @@ export class FriendRequestManager {
   // Remove processed approval from scratchpad
   async removeProcessedApproval(approvalProfileId: string): Promise<boolean> {
     try {
-      // Generate object name for my friend request scratchpad
-      const objectName = await this.sha256(this.profileObjectName);
+      // Profil lesen, um korrekten Object-Namen zu erhalten
+      const profile = await this.readProfile(this.profileId);
+      if (!profile || !profile['friend-request-scratchpad']) {
+        console.warn('⚠️ Kein gültiges Profil oder Friend-Request-Scratchpad gefunden');
+        return false;
+      }
+      
+      const objectName = profile['friend-request-scratchpad'].object_name;
       
       // Read all requests
       const allRequests = await this.readFriendRequests(objectName, this.antOwnerSecret);
@@ -570,8 +588,14 @@ export class FriendRequestManager {
   // Remove processed friend request (after we have accepted it) from my scratchpad
   async removeProcessedRequest(requestProfileId: string): Promise<boolean> {
     try {
-      // Generate object name for my friend request scratchpad
-      const objectName = await this.sha256(this.profileObjectName);
+      // Profil lesen, um korrekten Object-Namen zu erhalten
+      const profile = await this.readProfile(this.profileId);
+      if (!profile || !profile['friend-request-scratchpad']) {
+        console.warn('⚠️ Kein gültiges Profil oder Friend-Request-Scratchpad gefunden');
+        return false;
+      }
+      
+      const objectName = profile['friend-request-scratchpad'].object_name;
       
       // Read all requests
       const allRequests = await this.readFriendRequests(objectName, this.antOwnerSecret);
@@ -645,7 +669,14 @@ export class FriendRequestManager {
   // Stellt sicher, dass das Freundschaftsanfragen-Scratchpad existiert.
   private async ensureFriendRequestScratchpadExists(): Promise<boolean> {
     try {
-      const objectName = await this.sha256(this.profileObjectName);
+      // Profil lesen, um korrekten Object-Namen zu erhalten
+      const profile = await this.readProfile(this.profileId);
+      if (!profile || !profile['friend-request-scratchpad']) {
+        console.warn('⚠️ Kein gültiges Profil oder Friend-Request-Scratchpad gefunden');
+        return false;
+      }
+      
+      const objectName = profile['friend-request-scratchpad'].object_name;
       const url = this.buildProfileObjectUrl(objectName);
 
       // Prüfen, ob bereits vorhanden
@@ -740,22 +771,20 @@ export class FriendRequestManager {
 
       // Wir haben noch keine Adresse – die wird nach Erstellung gesetzt
 
-      // Generate object name for friend request scratchpad
-      const objectName = await this.sha256(this.profileObjectName);
-
-      // Create profile data
+      // Create basic profile data (ohne friend-request-scratchpad)
       const profileData: ProfileData = {
         accountname: this.accountName,
         'friend-request-scratchpad': {
           'ant-owner-secret': this.antOwnerSecret,
-          object_name: objectName
+          object_name: '' // Wird später durch ensureFriendRequestLink gesetzt
         }
       };
 
       // Scratchpad via POST erstellen
       const created = await this.createProfileScratchpad(profileData);
       if (created) {
-        await this.ensureFriendRequestScratchpadExists();
+        // Jetzt den korrekten Friend-Request-Link setzen (basierend auf profileId)
+        await this.ensureFriendRequestLink();
       }
       return created;
     } catch (error) {
@@ -784,5 +813,60 @@ export class FriendRequestManager {
   // Ermöglicht extern das Auslesen der aktuell bekannten Profil-ID (Scratchpad-Adresse)
   public getProfileId(): string {
     return this.profileId;
+  }
+  
+  // Stellt sicher, dass im Profil ein korrekter Link zum Friend-Request-Scratchpad existiert
+  // und verwendet die profileId als Basis für den Hash
+  public async ensureFriendRequestLink(): Promise<boolean> {
+    if (!this.profileId) {
+      console.warn('⚠️ Keine profileId vorhanden - kann Friend-Request-Link nicht sicherstellen');
+      return false;
+    }
+    
+    try {
+      console.log('🔍 ensureFriendRequestLink() wird ausgeführt');
+      let prof = await this.readProfile(this.profileId);
+      if (!prof) {
+        console.warn('⚠️ Profil nicht lesbar');
+        return false;
+      }
+      
+      // Hash der profileId berechnen (statt accountName)
+      const hashHex = await this.sha256(this.profileId);
+      
+      // Prüfen, ob bereits ein korrekter Link existiert
+      if ('friend-request-scratchpad' in prof) {
+        const existingHash = prof['friend-request-scratchpad'].object_name;
+        if (existingHash === hashHex) {
+          console.log('✅ Friend-Request-Scratchpad-Link bereits korrekt');
+          return true;
+        }
+        console.log('🔄 Friend-Request-Scratchpad-Link wird aktualisiert');
+      } else {
+        console.log('➕ Friend-Request-Scratchpad-Link wird erstellt');
+      }
+      
+      // Link setzen oder aktualisieren
+      prof['friend-request-scratchpad'] = {
+        'ant-owner-secret': this.antOwnerSecret,
+        object_name: hashHex
+      };
+      
+      // Profil speichern
+      const success = await this.writeProfile(prof);
+      if (success) {
+        console.log('✅ Friend-Request-Scratchpad-Link gespeichert');
+        
+        // Sicherstellen, dass das Scratchpad auch existiert
+        await this.ensureFriendRequestScratchpadExists();
+        return true;
+      } else {
+        console.error('❌ Fehler beim Speichern des Friend-Request-Scratchpad-Links');
+        return false;
+      }
+    } catch (e) {
+      console.error('❌ Fehler beim Sicherstellen des Friend-Request-Links:', e);
+      return false;
+    }
   }
 } 

@@ -503,6 +503,7 @@
         if (accountPackage.profileImage) {
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
         }
+        await ensureFriendRequestLink();
         startFriendRequestCheck();
       }
     }
@@ -777,6 +778,7 @@
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
         }
 
+        await ensureFriendRequestLink();
         startFriendRequestCheck();
       }
     }
@@ -2069,6 +2071,9 @@
   // Lader-Status für Public-Identifier-Erstellung im Wizard
   let publicIdentifierLoading = false;
 
+  // Temporär abgefangener Display-Name, falls das Account-Package noch nicht erstellt ist
+  let pendingDisplayName: string | null = null;
+
   // Keep publicIdentifiers in sync with account package
   $: if (accountPackage && Array.isArray(accountPackage.publicIdentifiers)) {
     publicIdentifiers = [...accountPackage.publicIdentifiers];
@@ -2168,9 +2173,12 @@
     currentSessionId = generateSessionId();
     sessionStartTimestamp = Date.now();
 
+    // Display-Name aus Wizard verwenden, falls vorhanden
+    const displayNameToUse = pendingDisplayName || 'User';
+
     const accountData: AccountPackage = {
       version: 3,
-      username: 'User',
+      username: displayNameToUse,
       themeUrl: 'default',
       language,
       friends: [],
@@ -2188,11 +2196,22 @@
 
       // FriendRequestManager initialisieren (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
-        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountData.username);
+        friendRequestManager = new FriendRequestManager(backendUrl, '', displayNameToUse);
         const ok = await friendRequestManager.initializeProfile();
 
         if (ok) {
           profileId = friendRequestManager.getProfileId();
+        }
+
+        // Sicherstellen, dass der Display-Name im Profil korrekt gesetzt ist
+        if (profileId) {
+          const profile = await friendRequestManager.readProfile(profileId);
+          if (profile) {
+            profile.accountname = displayNameToUse;
+            delete (profile as any).accountName; // Altes Feld entfernen
+            await friendRequestManager.writeProfile(profile);
+            console.log('✅ Display-Name im Profil gesetzt:', displayNameToUse);
+          }
         }
 
         // Update profile image if available
@@ -2200,19 +2219,27 @@
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
         }
 
+        await ensureFriendRequestLink();
         startFriendRequestCheck();
       }
     }
+
+    // Wir haben den Namen bereits verwendet, also zurücksetzen
+    pendingDisplayName = null;
   }
 
   async function handleWizardSetDisplayName(e: CustomEvent<string>) {
     const name = e.detail;
+    pendingDisplayName = name;
     if (accountPackage) {
+      // Optimistische Aktualisierung, damit der Name sofort in der UI erscheint
+      accountPackage = { ...accountPackage, username: name };
       const success = await updateAccountPackage({ ...accountPackage, username: name });
       if (success && friendRequestManager && profileId) {
         const profile = await friendRequestManager.readProfile(profileId);
         if (profile) {
           profile.accountname = name;
+          delete (profile as any).accountName;
           await friendRequestManager.writeProfile(profile);
         }
       }
@@ -2238,6 +2265,23 @@
   function handleWizardFinish() {
     showAccountCreation = false;
     showNotification(t.settingsUpdated);
+
+    // Sicherheits-Reinitialisierung: sicherstellen, dass Friend-Request-Scratchpad existiert
+    if (friendRequestManager) {
+      // Sicherstellen, dass das Profil korrekt initialisiert ist
+      friendRequestManager.initializeProfile().then(async () => {
+        // Sicherstellen, dass der Display-Name im Profil korrekt gesetzt ist
+        if (accountPackage && profileId) {
+          const profile = await friendRequestManager?.readProfile(profileId);
+          if (profile && profile.accountname !== accountPackage.username) {
+            console.log('🔄 Aktualisiere Display-Name im Profil:', accountPackage.username);
+            profile.accountname = accountPackage.username;
+            delete (profile as any).accountName; // Altes Feld entfernen
+            await friendRequestManager?.writeProfile(profile);
+          }
+        }
+      });
+    }
   }
 
   // Debounced Display-Name-Speicherung
@@ -2262,10 +2306,45 @@
       const profile = await friendRequestManager.readProfile(profileId);
       if (profile) {
         profile.accountname = name;
+        delete (profile as any).accountName;
         await friendRequestManager.writeProfile(profile);
       }
     }
     showNotification(t.settingsUpdated);
+  }
+
+  // Stellt sicher, dass im Profil ein Friend-Request-Scratchpad verlinkt ist
+  async function ensureFriendRequestLink() {
+    if (!friendRequestManager || !profileId) return;
+    try {
+      console.log('🔍 ensureFriendRequestLink() called');
+      // Verwende die neue Methode im FriendRequestManager
+      const success = await friendRequestManager.ensureFriendRequestLink();
+      if (success) {
+        console.log('✅ Friend-Request-Scratchpad-Link erfolgreich gesichert');
+      } else {
+        console.warn('⚠️ Konnte Friend-Request-Scratchpad-Link nicht sicherstellen');
+      }
+    } catch (e) {
+      console.error('Error ensuring friend request link', e);
+    }
+  }
+
+  // Nachdem das Account-Package angelegt wurde, evtl. wartenden Display-Name übernehmen
+  $: if (accountPackage && pendingDisplayName && accountPackage.username !== pendingDisplayName) {
+      accountPackage = { ...accountPackage, username: pendingDisplayName };
+      // Backend-Update asynchron starten (kein await in reactive block)
+      updateAccountPackage({ ...accountPackage, username: pendingDisplayName });
+      if (friendRequestManager && profileId) {
+        friendRequestManager?.readProfile(profileId).then(p => {
+          if (p) {
+            p.accountname = pendingDisplayName!;
+            delete (p as any).accountName;
+            friendRequestManager?.writeProfile(p);
+          }
+        });
+      }
+      pendingDisplayName = null;
   }
 </script>
 
@@ -2287,6 +2366,7 @@
       incomplete={false}
       profileInitializing={!profileId}
       publicIdentifierLoading={publicIdentifierLoading}
+      publicIdentifiers={publicIdentifiers}
       on:start={handleWizardStart}
       on:setDisplayName={handleWizardSetDisplayName}
       on:setProfileImage={handleWizardSetProfileImage}
