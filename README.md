@@ -227,6 +227,12 @@ These parameters are particularly useful for testing code changes without upload
 
 The Friends Messenger is specifically optimized for deployment on the Autonomi Network. The application structure minimizes the number of generated files during compilation, resulting in faster loading times and more cost-efficient operation on the decentralized network.
 
+#### Static Adapter & Client-Side Architecture
+
+The app uses `@sveltejs/adapter-static` to generate a pure client-side application with no server-side dependencies. This is crucial for deployment on the Autonomi Network, as it allows the app to run entirely in the user's browser without any backend server requirements beyond the Autonomi Network itself.
+
+#### Configuration Optimizations
+
 Key optimizations in `svelte.config.js` include:
 
 ```javascript
@@ -246,12 +252,42 @@ output: {
 }
 ```
 
-These configurations provide several benefits:
+#### Custom Vite Plugin for File Removal
 
-1. **Disabled version.json polling**: Prevents unnecessary network requests to check for application updates, reducing bandwidth usage and avoiding the generation of version-related files
+Despite the SvelteKit configuration, certain files like `env.js` and `version.json` are still generated during the build process. To ensure these are not included in the final bundle, a custom Vite plugin in `vite.config.ts` removes them:
 
-2. **Environment variables handling**: By using the `UNUSED_` prefix for public environment variables, we prevent SvelteKit from generating an `env.js` file.
+```typescript
+// Plugin that removes env.js / version.json from the build
+function stripSvelteKitMeta(): Plugin {
+  return {
+    name: 'strip-sveltekit-meta',
+    generateBundle(_options, bundle) {
+      // Remove all bundle entries ending with env.js or version.json
+      for (const key of Object.keys(bundle)) {
+        if (key.endsWith('env.js') || key.endsWith('version.json')) {
+          delete (bundle as any)[key];
+        }
+      }
 
-3. **Single bundle strategy**: Consolidates JavaScript code into fewer files, reducing the number of HTTP requests needed to load the application
+      // Remove import references to env.js in all chunks
+      for (const [, chunk] of Object.entries(bundle)) {
+        if (chunk.type === 'chunk') {
+          const c = chunk as unknown as { code: string };
+          c.code = c.code.replace(/import[^\n]*['\"]\.\/env\.js['\"];?\n?/g, '');
+        }
+      }
+    },
+    // Also physically delete the files from the output directory
+    async closeBundle() { /* file deletion code */ }
+  };
+}
+```
 
-This approach of few larger files ensures that the application loads quickly from the Autonomi Network while minimizing the cost of deployment and updates.
+These optimizations provide several benefits:
+
+1. **Pure Client-Side Code**: No server-side dependencies ensure the app works entirely through the browser
+2. **Minimal File Count**: Fewer files mean lower storage costs on the Autonomi Network
+3. **Reduced Network Requests**: Single bundle strategy consolidates JavaScript code, reducing HTTP requests
+4. **No Runtime Checks**: Removal of version checking and environment handling prevents unnecessary network calls
+
+This approach ensures that the application loads quickly from the Autonomi Network while minimizing the cost of deployment and updates.
