@@ -47,7 +47,7 @@ graph TD
     A[Global Root Key] --> B[User Chooses Public Name]
     B --> H[Key derivation]
     H --> I[GraphEntry Creation]
-    I --> J[Points to Profile ID (Scratchpad)]
+    I --> J[Points to Profile ID - Scratchpad]
 ```
 
 The Friends Messenger uses a sophisticated cryptographic identity system:
@@ -129,4 +129,4 @@ The Friends Messenger is built using modern web technologies:
 - **Multi-language Support**: UI available in English and German. Other languages will follow soonish
 - **File Sharing**: Support for sending images, videos, and files through WebRTC data channels
 - **Theme Support**: Customizable UI themes
-- **Real-time Status**: Connection status indicators 
+- **Real-time Status**: Connection status indicators
