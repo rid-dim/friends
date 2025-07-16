@@ -11,13 +11,26 @@ To sign up, create an account and start chatting with a friend you can see the f
 
 ![Friends Account Setup Demo](docs/friends_account_setup.mp4)
 
+### planned Features:
+
+- easier theming
+- plugins (through JS Webcomponents loaded from immutable chunks on Autonomi)
+- multi-user chat
+- optionally persisting chat history
+- sending offline messages => encrypted to a friend-specific scratchpad
+- more extensive profile pages
+- better status (more options even when online)
+- App as JS Webcomponent (usable by other Autonomi Apps)
+- App as Native App for all OSes and mobile
+
+
 ## Security Aspects
 
 The Friends Messenger ensures secure communication through multiple layers:
 
 - **End-to-End Encryption**: All peer-to-peer communication is secured via WebRTC's built-in DTLS (Datagram Transport Layer Security) and SRTP (Secure Real-time Transport Protocol)
 - **Cryptographic Identity**: Each user has a unique cryptographic profile ID (96-character hex string) derived from their account creation process
-- **Decentralized Handshake**: No central server stores or has access to user data - the Autonomi Network only facilitates the initial peer discovery
+- **Decentralized Handshake**: No central server stores or has access to user data - the Autonomi Network facilitates the initial peer discovery
 - **Perfect Forward Secrecy**: Each WebRTC session establishes new encryption keys, ensuring past communications remain secure even if keys are compromised
 - **No Data Persistence**: Messages are not stored on any server - they exist only during the active peer-to-peer session
 
