@@ -36,20 +36,31 @@ The Friends Messenger ensures secure communication through multiple layers:
 
 ## Installation & Start
 
-To start the P2P chat application, you first need to install the `dweb` command line tool:
+To start the P2P chat application, you first need to install the `dweb` command line tool (after installing rustup if you don't have that; description and link in the troubleshooting section at the bottom):
 
 ```bash
 cargo install --locked dweb-cli
 ```
 
-For detailed installation instructions, please visit the [dweb repository](https://codeberg.org/happybeing/dweb).
+and then you need to make sure to include a private key holding some Eth(Arb) and ANT in your environment variables to enable dweb to pay for the needed Account Setup (one digit USD worth of Eth and 1 ANT are enough for everything needed as of now)
 
-After installation, you can start the application with:
+easiest is to include this export in your ~/.bashrc (or other terminal init file)
+> export SECRET_KEY=0x1111111111111111111111111111111111111111111111111111111111111111
+
+For more detailed instructions regarding dweb, please visit the [dweb repository](https://codeberg.org/happybeing/dweb).
+
+After installation, you can start the dweb server with:
+(blocks one terminal session)
+
+```bash
+dweb serve
+```
+
+and then you can open friends from a 2nd terminal with
 
 ```bash
 dweb open friends
 ```
-
 
 ## Technical Details:
 
@@ -143,3 +154,27 @@ The Friends Messenger is built using modern web technologies:
 - **File Sharing**: Support for sending images, videos, and files through WebRTC data channels
 - **Theme Support**: Customizable UI themes
 - **Real-time Status**: Connection status indicators
+
+## Troubleshooting
+
+I recommend installing dweb via cargo after installing [rustup](https://www.rust-lang.org/learn/get-started) (the rust development environment)
+
+e.g. on Linux/MacOS:
+
+`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+
+(after that you need to close and open the terminal again)
+
+then the
+
+```bash
+cargo install --locked dweb-cli
+```
+
+### Error scenarios
+
+in case you see errors with the dweb install you may need to:
+
+```bash
+sudo apt-get update && sudo apt-get install libssl-dev pkg-config
+```
