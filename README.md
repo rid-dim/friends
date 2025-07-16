@@ -283,11 +283,4 @@ function stripSvelteKitMeta(): Plugin {
 }
 ```
 
-These optimizations provide several benefits:
-
-1. **Pure Client-Side Code**: No server-side dependencies ensure the app works entirely through the browser
-2. **Minimal File Count**: Fewer files mean lower storage costs on the Autonomi Network
-3. **Reduced Network Requests**: Single bundle strategy consolidates JavaScript code, reducing HTTP requests
-4. **No Runtime Checks**: Removal of version checking and environment handling prevents unnecessary network calls
-
 This approach ensures that the application loads quickly from the Autonomi Network while minimizing the cost of deployment and updates.
