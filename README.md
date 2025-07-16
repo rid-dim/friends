@@ -44,23 +44,10 @@ dweb open friends
 
 ```mermaid
 graph TD
-    A[Global Root Key] --> B[Account Creation Process]
-    B --> C[Profile ID Generation]
-    C --> D[96-char Hex Profile ID]
-    D --> E[Profile Scratchpad Creation]
-    E --> F[Autonomi Network Address]
-    
-    G[User Chooses Public Name] --> H[SHA256 Hash]
-    H --> I[Pointer Creation]
-    I --> J[Points to Profile ID]
-    
-    D --> K[Friend Request Scratchpad]
-    K --> L[SHA256 of Profile ID]
-    L --> M[Friend Request Address]
-    
-    style D fill:#e1f5fe
-    style F fill:#f3e5f5
-    style J fill:#e8f5e8
+    A[Global Root Key] --> B[User Chooses Public Name]
+    B --> H[Key derivation]
+    H --> I[GraphEntry Creation]
+    I --> J[Points to Profile ID (Scratchpad)]
 ```
 
 The Friends Messenger uses a sophisticated cryptographic identity system:
@@ -105,7 +92,8 @@ sequenceDiagram
     A->>B: Direct P2P communication begins
 ```
 
-The friendship system works through a sophisticated scratchpad-based messaging system:
+
+The friendship system works through a simple scratchpad-based messaging system where the communication partners tell each other where they expect the messages and check that location in intervals:
 
 1. **Profile Discovery**: Each user's profile is stored in a public scratchpad at their Profile ID address, containing their display name, profile image, and most importantly, the access credentials for their friend request scratchpad
 
