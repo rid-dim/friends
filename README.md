@@ -23,7 +23,6 @@ To sign up, create an account and start chatting with a friend you can see the f
 - App as JS Webcomponent (usable by other Autonomi Apps)
 - App as Native App for all OSes and mobile
 
-
 ## Security Aspects
 
 The Friends Messenger ensures secure communication through multiple layers:
@@ -47,8 +46,6 @@ and then you need to make sure to include a private key holding some Eth(Arb) an
 easiest is to include this export in your ~/.bashrc (or other terminal init file)
 > export SECRET_KEY=0x1111111111111111111111111111111111111111111111111111111111111111
 
-For more detailed instructions regarding dweb, please visit the [dweb repository](https://codeberg.org/happybeing/dweb).
-
 After installation, you can start the dweb server with:
 (blocks one terminal session)
 
@@ -61,6 +58,8 @@ and then you can open friends from a 2nd terminal with
 ```bash
 dweb open friends
 ```
+
+For more detailed instructions regarding dweb, please visit the [dweb repository](https://codeberg.org/happybeing/dweb).
 
 ## Technical Details:
 
@@ -178,3 +177,81 @@ in case you see errors with the dweb install you may need to:
 ```bash
 sudo apt-get update && sudo apt-get install libssl-dev pkg-config
 ```
+
+## Local Development
+
+To set up a local development environment for the Friends Messenger, follow these steps:
+
+1. Clone the repository
+   ```bash
+   git clone https://codeberg.org/riddim/friends.git
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+   
+This will launch the application in development mode with hot-reloading enabled.
+
+### Optional URL Parameters
+
+The development version supports several URL parameters to customize the application behavior:
+
+- **accountname**: use a derived account for development (the name doesn't need to be the display name - it's just used for key derivation to be able to use multiple accounts with the same SECRET_KEY)
+  ```
+  http://localhost:5173/?accountname=testuser
+  ```
+
+- **backend**: Specifies a custom local dweb server as Autonomi backend (so data fetch calls will not be sent to the dev server but to the dweb backend which enables network interaction up/download of data to the Autonomi alpha test network / the Autonomi mainnet during App development)
+  ```
+  http://localhost:5173/?backend=http://localhost:5537
+  ```
+
+- **debug**: sets the debug flag to True => the App shows additional debug info like Scratchpad addresses. Particularly useful when wanting to have extended info available while not flooding the UI for the regular user. (But for debugging purposes users with trouble could set the query param and help with debugging without a lot of hassle too)
+  ```
+  http://localhost:5173/?debug=true
+  ```
+
+You can combine multiple parameters:
+```
+http://localhost:5173/?accountname=testuser&backend=http://localhost:5537&debug=true
+```
+
+These parameters are particularly useful for testing code changes without uploading the app to the Autonomi network repeatedly.
+
+### App optimization for Autonomi
+
+The Friends Messenger is specifically optimized for deployment on the Autonomi Network. The application structure minimizes the number of generated files during compilation, resulting in faster loading times and more cost-efficient operation on the decentralized network.
+
+Key optimizations in `svelte.config.js` include:
+
+```javascript
+// Disable version.json polling
+version: {
+    pollInterval: 0
+},
+
+// Disable environment variables embedding in env.js
+env: {
+    publicPrefix: 'UNUSED_'
+},
+
+// Bundle strategy for optimized output
+output: {
+    bundleStrategy: 'single'
+}
+```
+
+These configurations provide several benefits:
+
+1. **Disabled version.json polling**: Prevents unnecessary network requests to check for application updates, reducing bandwidth usage and avoiding the generation of version-related files
+
+2. **Environment variables handling**: By using the `UNUSED_` prefix for public environment variables, we prevent SvelteKit from generating an `env.js` file.
+
+3. **Single bundle strategy**: Consolidates JavaScript code into fewer files, reducing the number of HTTP requests needed to load the application
+
+This approach of few larger files ensures that the application loads quickly from the Autonomi Network while minimizing the cost of deployment and updates.
