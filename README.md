@@ -9,10 +9,7 @@ The Handshake to exchange Peer Info doesn't rely on a classic Server but utilize
 
 To sign up, create an account and start chatting with a friend you can see the flow in this little demo:
 
-<video width="600" controls>
-  <source src="docs/friends_account_setup.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+![Friends Account Setup Demo](docs/friends_account_setup.mp4)
 
 ## Security Aspects
 
@@ -105,7 +102,7 @@ sequenceDiagram
     AFS-->>A: Returns Bob's approval
     
     Note over A,B: WebRTC Connection Established
-    A<->>B: Direct P2P communication begins
+    A->>B: Direct P2P communication begins
 ```
 
 The friendship system works through a sophisticated scratchpad-based messaging system:
