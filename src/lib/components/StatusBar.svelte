@@ -25,7 +25,11 @@
     {/if}
   </div>
   
-  <h1>{appTitle}</h1>
+  <h1>{appTitle}
+    <sub class="dweb-app-sub">
+      <a href="https://codeberg.org/happybeing/dweb" target="_blank" rel="noopener noreferrer" class="dweb-app-link">a dweb app</a>
+    </sub>
+  </h1>
   
   <div class="status-info">
     <div class="connection-status">
@@ -105,6 +109,29 @@
     font-weight: 600;
     text-align: center;
     justify-self: center;
+    display: inline-block;
+  }
+
+  .dweb-app-sub {
+    font-size: 0.7em;
+    color: #888;
+    font-weight: 400;
+    margin-left: 0.4em;
+    vertical-align: sub;
+    letter-spacing: 0.01em;
+    opacity: 0.85;
+  }
+  .dweb-app-link {
+    color: #888;
+    text-decoration: none;
+    opacity: 0.85;
+    transition: color 0.2s, text-decoration 0.2s;
+    font-weight: 400;
+  }
+  .dweb-app-link:hover, .dweb-app-link:focus {
+    color: #444;
+    text-decoration: underline;
+    opacity: 1;
   }
   
   .status-info {

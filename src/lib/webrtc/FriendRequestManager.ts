@@ -43,13 +43,13 @@ export class FriendRequestManager {
 
   // Build URL to access *owned* scratchpad by object_name (needs secret for write)
   private buildProfileObjectUrl(objectName: string): string {
-    const baseUrl = this.backendUrl ? `${this.backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
+    const baseUrl = this.backendUrl ? `${this.backendUrl}/dweb-0/scratchpad-public` : '/dweb-0/scratchpad-public';
     return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
   }
 
   // Build URL to access a scratchpad by its public address (read-only)
   private buildProfileAddressUrl(address: string): string {
-    const baseUrl = this.backendUrl ? `${this.backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
+    const baseUrl = this.backendUrl ? `${this.backendUrl}/dweb-0/scratchpad-public` : '/dweb-0/scratchpad-public';
     return `${baseUrl}/${address}`;
   }
 

@@ -52,13 +52,13 @@ export class FriendRequestManager {
   
   // Build URL for profile scratchpad (public)
   private buildProfileUrl(profileId: string): string {
-    const baseUrl = this.backendUrl ? `${this.backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
+    const baseUrl = this.backendUrl ? `${this.backendUrl}/dweb-0/scratchpad-public` : '/dweb-0/scratchpad-public';
     return `${baseUrl}/${profileId}`;
   }
   
   // Build URL for friend request scratchpad
   private buildFriendRequestUrl(objectName: string): string {
-    const baseUrl = this.backendUrl ? `${this.backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
+    const baseUrl = this.backendUrl ? `${this.backendUrl}/dweb-0/scratchpad-public` : '/dweb-0/scratchpad-public';
     return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
   }
   

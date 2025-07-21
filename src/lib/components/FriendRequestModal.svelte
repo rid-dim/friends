@@ -22,7 +22,7 @@
 
   // Helper to build pointer URL
   function buildPointerUrl(objectName: string): string {
-    const base = friendRequestManager?.backendUrl ? `${friendRequestManager.backendUrl}/ant-0/pointer` : '/ant-0/pointer';
+    const base = friendRequestManager?.backendUrl ? `${friendRequestManager.backendUrl}/dweb-0/pointer` : '/dweb-0/pointer';
     return `${base}?object_name=${encodeURIComponent(objectName)}`;
   }
 
@@ -63,8 +63,8 @@
     ? (profileData.profileImage.startsWith('http')
         ? profileData.profileImage
         : backendUrl
-          ? `${backendUrl}/ant-0/data/${profileData.profileImage}`
-          : `/ant-0/data/${profileData.profileImage}`)
+          ? `${backendUrl}/dweb-0/data/${profileData.profileImage}`
+          : `/dweb-0/data/${profileData.profileImage}`)
     : '';
   
   async function loadProfile() {

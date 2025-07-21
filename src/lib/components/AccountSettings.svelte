@@ -14,7 +14,7 @@
   // Build full URL for profile image
   $: profileImageUrl = profileImage ? 
     (profileImage.startsWith('http') ? profileImage : 
-     backendUrl ? `${backendUrl}/ant-0/data/${profileImage}` : `/ant-0/data/${profileImage}`) : 
+     backendUrl ? `${backendUrl}/dweb-0/data/${profileImage}` : `/dweb-0/data/${profileImage}`) : 
     '';
   
   function handleProfileImageChange(event: Event) {

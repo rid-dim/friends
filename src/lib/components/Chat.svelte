@@ -27,6 +27,7 @@
   export let language: 'en' | 'de' = 'en';
   export let debug: boolean = false;
   export let backendUrl: string = '';
+  export let requestSent: boolean = false; // True if we sent a friend request but haven't received approval yet
   
   const dispatch = createEventDispatcher();
   
@@ -40,7 +41,7 @@
   let avatarUrl: string | null = null;
 
   $: {
-    avatarUrl = friend?.profileImage ? (friend.profileImage.startsWith('http') ? friend.profileImage : backendUrl ? `${backendUrl}/ant-0/data/${friend.profileImage}` : `/ant-0/data/${friend.profileImage}`) : null;
+    avatarUrl = friend?.profileImage ? (friend.profileImage.startsWith('http') ? friend.profileImage : backendUrl ? `${backendUrl}/dweb-0/data/${friend.profileImage}` : `/dweb-0/data/${friend.profileImage}`) : null;
     console.log('Constructed avatar URL:', avatarUrl);
   }
 
@@ -193,7 +194,15 @@
   
   {#if friendName}
   <div class="messages" bind:this={messagesContainer}>
-    {#if messages.length === 0}
+    {#if requestSent}
+      <div class="request-status">
+        <div class="status-icon">📤</div>
+        <div class="status-text">
+          <h3>{t.friendRequestSent || 'Friend request sent'}</h3>
+          <p>{t.waitingForResponse || 'Waiting for response...'}</p>
+        </div>
+      </div>
+    {:else if messages.length === 0}
       <div class="empty-chat">
         <p>{t.noMessages}</p>
       </div>
@@ -354,6 +363,40 @@
     height: 100%;
     text-align: center;
     color: var(--foreground-color2);
+  }
+  
+  .request-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    color: var(--text-color);
+    gap: 1rem;
+    background: var(--foreground-color1);
+    border-radius: 12px;
+    padding: 2rem;
+    margin: 1rem;
+    border: 1px solid var(--line-color);
+  }
+  
+  .status-icon {
+    font-size: 2.5rem;
+    opacity: 1;
+  }
+  
+  .status-text h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--notification-color);
+    font-size: 1.2rem;
+    font-weight: 600;
+  }
+  
+  .status-text p {
+    margin: 0;
+    color: var(--text-color);
+    opacity: 1;
+    font-size: 1rem;
   }
   
   .message {

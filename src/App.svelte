@@ -188,7 +188,7 @@
   
   // Build scratchpad URL with optional object_name parameter
   function buildScratchpadUrl(): string {
-    const baseUrl = backendUrl ? `${backendUrl}/ant-0/scratchpad-private` : '/ant-0/scratchpad-private';
+    const baseUrl = backendUrl ? `${backendUrl}/dweb-0/scratchpad-private` : '/dweb-0/scratchpad-private';
     if (accountName) {
       return `${baseUrl}?object_name=${encodeURIComponent(accountName)}`;
     }
@@ -206,7 +206,7 @@
   // Build public scratchpad URL for peer communication
   function buildPublicScratchpadUrl(): string {
     const objectName = buildCommObjectName();
-    const baseUrl = backendUrl ? `${backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
+    const baseUrl = backendUrl ? `${backendUrl}/dweb-0/scratchpad-public` : '/dweb-0/scratchpad-public';
     return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
   }
   
@@ -216,7 +216,7 @@
       throw new Error('profileId not initialised yet');
     }
     const objectName = `${friendProfileId}comm${profileId}`;
-    const baseUrl = backendUrl ? `${backendUrl}/ant-0/scratchpad-public` : '/ant-0/scratchpad-public';
+    const baseUrl = backendUrl ? `${backendUrl}/dweb-0/scratchpad-public` : '/dweb-0/scratchpad-public';
     return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
   }
   
@@ -811,7 +811,7 @@
       themeFullUrl = url;
     } else {
       // Use backendUrl for constructing theme URL, which defaults to relative if not set
-      themeFullUrl = backendUrl ? `${backendUrl}/ant-0/data/${url}` : `/ant-0/data/${url}`;
+      themeFullUrl = backendUrl ? `${backendUrl}/dweb-0/data/${url}` : `/dweb-0/data/${url}`;
     }
     
     const themeLink = document.createElement('link');
@@ -828,8 +828,8 @@
         // Remove quotes if present
         const cleanDatamap = backgroundDatamap.replace(/['"]/g, '');
         const backgroundUrl = backendUrl ? 
-          `url("${backendUrl}/ant-0/data/${cleanDatamap}")` : 
-          `url("/ant-0/data/${cleanDatamap}")`;
+          `url("${backendUrl}/dweb-0/data/${cleanDatamap}")` : 
+          `url("/dweb-0/data/${cleanDatamap}")`;
         document.documentElement.style.setProperty('--theme-background-url', backgroundUrl);
         
         // Apply background to body
@@ -1729,6 +1729,9 @@
         friends = [...friends, newFriend];
       }
       
+      // Automatically select the newly added friend
+      selectedFriendId = newFriend.peerId || newFriend.displayName;
+      
       // Update account package
       if (accountPackage) {
         const updatedPackage = {
@@ -1830,6 +1833,9 @@
         friends = [...friends, newFriend];
       }
       
+      // Automatically select the newly added friend
+      selectedFriendId = newFriend.peerId || newFriend.displayName;
+      
       // Update account package
       if (accountPackage) {
         const updatedPackage = {
@@ -1880,7 +1886,62 @@
     
     try {
       const requests = await friendRequestManager.checkPendingRequests();
-      pendingFriendRequests = requests;
+      
+      // Automatically approve requests from existing friends
+      for (const request of requests) {
+        const existingFriend = friends.find(f => 
+          f.displayName === request.displayName || 
+          f.targetProfileId === request.profileId
+        );
+        
+        if (existingFriend) {
+          console.log(`🔄 Auto-approving request from existing friend: ${existingFriend.displayName}`);
+          
+          // Send approval automatically
+          await friendRequestManager.acceptFriendRequest(request.profileId, existingFriend.scratchpadAddress || '');
+          
+          // Remove the processed request
+          await friendRequestManager.removeProcessedRequest(request.profileId);
+          
+          // Update friend with new peerId if we don't have one yet
+          if (!existingFriend.peerId && request.request) {
+            const friendIndex = friends.findIndex(f => f === existingFriend);
+            if (friendIndex !== -1) {
+              friends[friendIndex] = {
+                ...friends[friendIndex],
+                peerId: request.request
+              };
+              friends = [...friends];
+              
+              // Update account package
+              if (accountPackage) {
+                const updatedPackage = {
+                  ...accountPackage,
+                  friends: friends.map(f => ({
+                    peerId: f.peerId,
+                    displayName: f.displayName,
+                    scratchpadAddress: f.scratchpadAddress,
+                    targetProfileId: f.targetProfileId
+                  }))
+                };
+                await updateAccountPackage(updatedPackage);
+              }
+              
+              // Start connection attempt
+              startAutoReconnectForFriend(request.request);
+            }
+          }
+        }
+      }
+      
+      // Update pending requests list (remove auto-approved ones)
+      pendingFriendRequests = requests.filter(request => {
+        const existingFriend = friends.find(f => 
+          f.displayName === request.displayName || 
+          f.targetProfileId === request.profileId
+        );
+        return !existingFriend; // Only keep requests from non-existing friends
+      });
       
       // Check for received approvals
       const approvals = await friendRequestManager.checkReceivedApprovals();
@@ -1975,6 +2036,9 @@
             } else {
               friends = [...friends, newFriend];
             }
+
+            // Automatically select the newly added friend
+            selectedFriendId = newFriend.peerId || newFriend.displayName;
 
             // Account Package aktualisieren
             if (accountPackage) {
@@ -2081,7 +2145,7 @@
 
   // Helper: build pointer URL
   function buildPointerUrl(objectName: string): string {
-    const baseUrl = backendUrl ? `${backendUrl}/ant-0/pointer` : '/ant-0/pointer';
+    const baseUrl = backendUrl ? `${backendUrl}/dweb-0/pointer` : '/dweb-0/pointer';
     return `${baseUrl}?tries=3&object_name=${encodeURIComponent(objectName)}`;
   }
 
@@ -2422,6 +2486,7 @@
           friendScratchpadAddress={selectedFriend.scratchpadAddress}
           isLoadingScratchpad={selectedFriend.isLoadingScratchpad}
           scratchpadError={selectedFriend.scratchpadError}
+          requestSent={!!selectedFriend.scratchpadAddress && !selectedFriend.peerId}
           language={language}
           debug={debugMode}
           backendUrl={backendUrl}
@@ -2516,8 +2581,8 @@
                   src={accountPackage.profileImage.startsWith('http') 
                     ? accountPackage.profileImage 
                     : backendUrl 
-                      ? `${backendUrl}/ant-0/data/${accountPackage.profileImage}` 
-                      : `/ant-0/data/${accountPackage.profileImage}`} 
+                      ? `${backendUrl}/dweb-0/data/${accountPackage.profileImage}` 
+                      : `/dweb-0/data/${accountPackage.profileImage}`} 
                   alt="Profile" 
                 />
               </div>
