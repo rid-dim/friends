@@ -23,7 +23,8 @@
   import './lib/styles/theme.css';
   
   // Import translations
-  import { translations } from './lib/i18n/translations';
+  import { t, language as langStore, changeLanguage } from './i18n/i18n';
+  import { translations, type Language } from './i18n/translations';
   
   // Backend and account package related types
   interface AccountPackage {
@@ -31,7 +32,7 @@
     username: string;
     profileImage?: string; // datamap address
     themeUrl?: string; // theme URL
-    language?: 'en' | 'de';
+    language?: Language;
     friends?: Array<{
       peerId?: string; // Optional - can be added later
       displayName: string;
@@ -108,20 +109,27 @@
   let sessionStartTimestamp = 0;
   
   // Language state
-  let language: 'en' | 'de' = 'en';
+  let language: Language = 'en';
+  
   // Debug flag via ?debug=true
   let debugMode: boolean = false;
   
   // Update language when account package changes
   $: if (accountPackage?.language) {
     language = accountPackage.language;
+    changeLanguage(language);
+  }
+  
+  // Initialize central i18n store when local language changes
+  $: if (language) {
+    changeLanguage(language);
   }
   
   // Get translations for current language
-  $: t = translations[language];
+  $: currentTranslations = translations[language];
   
   // Update connectionStatus when language changes
-  $: connectionStatus = connectionStatus || t.initializing;
+  $: connectionStatus = connectionStatus || (currentTranslations.initializing || 'Initializing...');
   
   // Initialize connection manager
   onMount(() => {
@@ -414,8 +422,8 @@
     handshakeLoopRunning = false;
     
     // Update UI
-    connectionStatus = t.sessionTransferred;
-    showNotification(t.sessionTransferred);
+    connectionStatus = currentTranslations.sessionTransferred;
+    showNotification(currentTranslations.sessionTransferred);
     
     // Disable all interactive elements
     friends = friends.map(f => ({ ...f, isConnected: false }));
@@ -446,7 +454,7 @@
             }
           }
 
-          // Wenn wir Einträge entfernt haben, Account-Package sofort aktualisieren
+          // Wenn wir Einträge entfernt haben, Account-Pakete sofort aktualisieren
           if (dedupedFriendsData.length !== fetchedPackage.friends.length) {
             console.log('🧹 Duplicate friends removed from account package:', fetchedPackage.friends.length - dedupedFriendsData.length);
             await updateAccountPackage({ friends: dedupedFriendsData });
@@ -489,7 +497,7 @@
       }
     } catch (error) {
       console.error('❌ Error during backend initialization:', error);
-      connectionStatus = t.backendError;
+      connectionStatus = currentTranslations.backendError;
     } finally {
       isLoadingAccountPackage = false;
     }
@@ -961,17 +969,22 @@
     updateConnectionStatus();
   }
   
-  // Update overall connection status
-  function updateConnectionStatus() {
+  // Update overall connection status - now reactive to language changes
+  $: {
     const connectedCount = friends.filter(f => f.isConnected).length;
     
     if (connectedCount === 0) {
-      connectionStatus = 'No connections';
+      connectionStatus = translations[language]?.noConnections || 'No connections';
     } else if (connectedCount === 1) {
-      connectionStatus = '1 friend connected';
+      connectionStatus = translations[language]?.oneConnected || '1 friend connected';
     } else {
-      connectionStatus = `${connectedCount} friends connected`;
+      connectionStatus = translations[language]?.multipleConnected?.replace('{count}', String(connectedCount)) || `${connectedCount} friends connected`;
     }
+  }
+  
+  // Legacy function kept for compatibility
+  function updateConnectionStatus() {
+    // This is now handled by the reactive statement above
   }
   
   // Get friend display name
@@ -1198,7 +1211,7 @@
     
     // Check if session is still active
     if (!isSessionActive) {
-      showNotification(t.sessionTransferred);
+      showNotification(currentTranslations.sessionTransferred);
       return;
     }
     
@@ -1383,15 +1396,15 @@
         const permission = await Notification.requestPermission();
         updateNotificationStatus();
         if (permission === 'granted') {
-          showNotification(t.notificationsEnabled);
+          showNotification(currentTranslations.notificationsEnabled);
         } else if (permission === 'denied') {
-          showNotification(t.notificationsDenied);
+          showNotification(currentTranslations.notificationsDenied);
         }
       } else {
         updateNotificationStatus();
       }
     } else {
-      notificationStatus = t.notificationsNotSupported;
+      notificationStatus = currentTranslations.notificationsNotSupported;
     }
   }
   
@@ -1402,35 +1415,41 @@
         const permission = await Notification.requestPermission();
         updateNotificationStatus();
         if (permission === 'granted') {
-          showNotification(t.notificationsEnabled);
+          showNotification(currentTranslations.notificationsEnabled);
         } else if (permission === 'denied') {
-          showNotification(t.notificationsDenied);
+          showNotification(currentTranslations.notificationsDenied);
         }
       } else {
         updateNotificationStatus();
       }
     } else {
-      notificationStatus = t.notificationsNotSupported;
+      notificationStatus = currentTranslations.notificationsNotSupported;
     }
   }
   
-  // Update notification status display
-  function updateNotificationStatus() {
+  // Update notification status display (reactive to language changes)
+  $: if (language && browser) {
     if ('Notification' in window) {
       switch (Notification.permission) {
         case 'granted':
-          notificationStatus = t.notificationsActivated;
+          notificationStatus = translations[language].notificationsActivated || 'Activated';
           break;
         case 'denied':
-          notificationStatus = t.notificationsBlocked;
+          notificationStatus = translations[language].notificationsBlocked || 'Blocked';
           break;
         case 'default':
-          notificationStatus = t.notificationsNotRequested;
+          notificationStatus = translations[language].notificationsNotRequested || 'Not requested';
           break;
       }
     } else {
-      notificationStatus = t.notificationsNotSupported;
+      notificationStatus = translations[language].notificationsNotSupported || 'Not supported';
     }
+  }
+  
+  // Legacy function for manual updates (now mostly unused)
+  function updateNotificationStatus() {
+    // This function is now mostly handled by the reactive statement above
+    // but keeping it for compatibility with existing calls
   }
   
   // Test function for push notifications (for development/debugging)
@@ -1440,7 +1459,7 @@
       console.log('Test-Push-Notification gesendet');
     } else {
       console.log('Push-Notifications nicht verfügbar oder nicht erlaubt');
-      showNotification(t.notificationsNotAvailable);
+      showNotification(currentTranslations.notificationsNotAvailable);
     }
   }
   
@@ -1708,7 +1727,7 @@
     const { profileId, displayName } = event.detail;
     
     if (!friendRequestManager) {
-      showNotification(t.errorSendingRequest);
+      showNotification(currentTranslations.errorSendingRequest);
       return;
     }
     
@@ -1768,11 +1787,11 @@
         await updateAccountPackage(updatedPackage);
       }
       
-      showNotification(t.friendRequestSent || 'Friend request sent');
+      showNotification(currentTranslations.friendRequestSent || 'Friend request sent');
       showFriendRequestModal = false;
     } catch (error) {
       console.error('Error sending friend request:', error);
-      showNotification(t.errorSendingRequest);
+      showNotification(currentTranslations.errorSendingRequest);
     }
   }
   
@@ -2050,11 +2069,11 @@
                 ...(newFriend.scratchpadAddress ? { scratchpadAddress: newFriend.scratchpadAddress } : {}),
                 // targetProfileId nur überschreiben, wenn newFriend.targetProfileId vorhanden ist
                 ...(newFriend.targetProfileId ? { targetProfileId: newFriend.targetProfileId } : {})
-              };
-              
-              console.log('✅ Updated friend from approval:', updatedFriend);
-              friends[existingIdx] = updatedFriend;
-              friends = [...friends]; // Svelte-Update triggern
+            };
+            
+            console.log('✅ Updated friend from approval:', updatedFriend);
+            friends[existingIdx] = updatedFriend;
+            friends = [...friends]; // Svelte-Update triggern
             } else {
               friends = [...friends, newFriend];
             }
@@ -2206,7 +2225,7 @@
         if (accountPackage) {
           await updateAccountPackage({ ...accountPackage, publicIdentifiers });
         }
-        showNotification(t.publicIdentifierAdded);
+        showNotification(currentTranslations.publicIdentifierAdded);
         showAddPublicIdentifier = false;
         newPublicIdentifier = '';
       } else if (res.status === 502) {
@@ -2231,7 +2250,7 @@
                 if (accountPackage) {
                   await updateAccountPackage({ ...accountPackage, publicIdentifiers });
                 }
-                showNotification(t.publicIdentifierAdded);
+                showNotification(currentTranslations.publicIdentifierAdded);
                 showAddPublicIdentifier = false;
                 newPublicIdentifier = '';
                 return;
@@ -2240,16 +2259,16 @@
           } catch (e) {
             console.error('Error verifying existing pointer', e);
           }
-          showNotification(t.publicNameTaken);
+          showNotification(currentTranslations.publicNameTaken);
         } else {
-          showNotification(t.connectionError);
+          showNotification(currentTranslations.connectionError);
         }
       } else {
-        showNotification(t.connectionError);
+        showNotification(currentTranslations.connectionError);
       }
     } catch (err) {
       console.error('Error creating public identifier', err);
-      showNotification(t.connectionError);
+      showNotification(currentTranslations.connectionError);
     }
   }
 
@@ -2350,7 +2369,7 @@
 
   function handleWizardFinish() {
     showAccountCreation = false;
-    showNotification(t.settingsUpdated);
+    showNotification(currentTranslations.settingsUpdated);
 
     // Sicherheits-Reinitialisierung: sicherstellen, dass Friend-Request-Scratchpad existiert
     if (friendRequestManager) {
@@ -2396,7 +2415,7 @@
         await friendRequestManager.writeProfile(profile);
       }
     }
-    showNotification(t.settingsUpdated);
+    showNotification(currentTranslations.settingsUpdated);
   }
 
   // Stellt sicher, dass im Profil ein Friend-Request-Scratchpad verlinkt ist
@@ -2432,6 +2451,8 @@
       }
       pendingDisplayName = null;
   }
+
+  // Connection status is now updated reactively above
 </script>
 
 <div class="app">
@@ -2448,7 +2469,7 @@
   <!-- Account creation wizard -->
   {#if showAccountCreation}
     <AccountCreationWizard
-      {language}
+      language={language}
       incomplete={false}
       profileInitializing={!profileId}
       publicIdentifierLoading={publicIdentifierLoading}
@@ -2469,13 +2490,13 @@
       {handshakeCountdown}
       {notificationStatus}
       username={accountPackage?.username}
-      {language}
+      language={language}
       on:openSettings={() => showSettingsModal = true}
     />
     <div class="header-buttons">
       <FriendRequestNotification
         pendingRequests={pendingFriendRequests.length}
-        {language}
+        language={language}
         on:click={handleShowFriendRequests}
       />
     </div>
@@ -2489,7 +2510,7 @@
         {profileId}
         myUsername={accountPackage?.username || 'User'}
         {handshakeCountdowns}
-        {language}
+        language={language}
         profileImage={accountPackage?.profileImage || ''}
         {backendUrl}
         publicIdentifiers={publicIdentifiers}
@@ -2523,8 +2544,8 @@
         />
       {:else}
         <div class="no-friend-selected">
-          <h2>{translations[language].welcome}</h2>
-          <p>{translations[language].noFriendSelected}</p>
+          <h2>{currentTranslations.welcome}</h2>
+          <p>{currentTranslations.noFriendSelected}</p>
         </div>  
       {/if}
     </div>
@@ -2539,10 +2560,10 @@
   {#if !isSessionActive}
     <div class="session-overlay">
       <div class="session-message">
-        <h2>⚠️ {t.sessionTransferred}</h2>
-        <p>{t.sessionDeactivatedMessage}</p>
+        <h2>⚠️ {currentTranslations.sessionTransferred}</h2>
+        <p>{currentTranslations.sessionDeactivatedMessage}</p>
         <button class="primary-button" on:click={() => window.location.reload()}>
-          {t.reload}
+          {currentTranslations.reload}
         </button>
       </div>
     </div>
@@ -2559,17 +2580,17 @@
       aria-labelledby="settings-title"
     >
       <div class="modal-content">
-        <h2 id="settings-title">{t.accountSettings}</h2>
+        <h2 id="settings-title">{currentTranslations.accountSettings}</h2>
         <button class="close-button" on:click={() => showSettingsModal = false}>×</button>
         
         <div class="settings-container">
           <!-- Display Name -->
           <div class="setting-group">
-            <label for="display-name">{t.displayName}</label>
+            <label for="display-name">{currentTranslations.displayName}</label>
             <input
               id="display-name"
               type="text"
-              placeholder={t.chooseDisplayName}
+              placeholder={currentTranslations.chooseDisplayName}
               bind:value={displayNameDraft}
               on:input={(e) => {
                 const input = e.target as HTMLInputElement;
@@ -2579,11 +2600,11 @@
           </div>
 
           <div class="setting-group">
-            <label for="profile-image">{t.profileImage}</label>
+            <label for="profile-image">{currentTranslations.profileImage}</label>
             <input
               id="profile-image"
               type="text"
-              placeholder={t.enterDatamapAddress}
+              placeholder={currentTranslations.enterDatamapAddress}
               value={accountPackage.profileImage || ''}
               on:input={async (e) => {
                 if (accountPackage) {
@@ -2597,7 +2618,7 @@
                     if (friendRequestManager) {
                       await friendRequestManager.updateProfileImage(input.value);
                     }
-                    showNotification(t.settingsUpdated);
+                    showNotification(currentTranslations.settingsUpdated);
                   }
                 }
               }}
@@ -2617,11 +2638,11 @@
           </div>
           
           <div class="setting-group">
-            <label for="theme-url">{t.themeUrl}</label>
+            <label for="theme-url">{currentTranslations.themeUrl}</label>
             <input
               id="theme-url"
               type="text"
-              placeholder={t.enterThemeUrl}
+              placeholder={currentTranslations.enterThemeUrl}
               value={accountPackage.themeUrl || ''}
               on:input={async (e) => {
                 if (accountPackage) {
@@ -2631,7 +2652,7 @@
                     themeUrl: input.value
                   });
                   if (success) {
-                    showNotification(t.settingsUpdated);
+                    showNotification(currentTranslations.settingsUpdated);
                     loadTheme(input.value);
                   }
                 }
@@ -2640,21 +2661,28 @@
           </div>
           
           <div class="setting-group">
-            <label for="language">{t.language}</label>
+            <label for="language">{currentTranslations.language}</label>
             <select
               id="language"
-              value={accountPackage.language || 'en'}
-              on:change={async (e) => {
+              value={language}
+              on:change={(e) => {
+                const select = e.target as HTMLSelectElement;
+                const newLang = select.value as Language;
+                
+                // Wichtig: Zentralen Store zuerst aktualisieren
+                changeLanguage(newLang);
+                // Dann lokale Variable aktualisieren
+                language = newLang;
+                
                 if (accountPackage) {
-                  const select = e.target as HTMLSelectElement;
-                  const success = await updateAccountPackage({
+                  updateAccountPackage({
                     ...accountPackage,
-                    language: select.value as 'en' | 'de'
+                    language: newLang
+                  }).then(success => {
+                    if (success) {
+                      showNotification(translations[newLang]?.settingsUpdated || 'Settings updated');
+                    }
                   });
-                  if (success) {
-                    showNotification(t.settingsUpdated);
-                    language = select.value as 'en' | 'de';
-                  }
                 }
               }}
             >
@@ -2671,7 +2699,7 @@
 
           <!-- NEW: Public Identifier management -->
           <div class="setting-group">
-            <label>{t.publicIdentifier}</label>
+            <label>{currentTranslations.publicIdentifier}</label>
 
             {#if publicIdentifiers.length > 0}
               <ul class="public-identifiers">
@@ -2685,7 +2713,7 @@
               <div class="public-id-input">
                 <input
                   type="text"
-                  placeholder={t.enterPublicIdentifier}
+                  placeholder={currentTranslations.enterPublicIdentifier}
                   bind:value={newPublicIdentifier}
                   on:keydown={(e) => e.key === 'Enter' && createPublicIdentifier(newPublicIdentifier)}
                 />
@@ -2701,12 +2729,12 @@
           <!-- Push-Notification Einstellungen -->
           {#if browser && 'Notification' in window}
             <div class="setting-group">
-              <label>{t.pushNotifications || 'Push-Notifications'}</label>
+              <label>{currentTranslations.pushNotifications || 'Push-Notifications'}</label>
               <div class="notification-permission-row">
                 <span class="notification-status-badge">{notificationStatus}</span>
                 {#if Notification.permission !== 'granted'}
                   <button class="secondary-button" on:click={() => reRequestNotificationPermission()}>
-                    {t.requestAgain}
+                    {currentTranslations.requestAgain}
                   </button>
                 {/if}
               </div>
@@ -2727,7 +2755,7 @@
   {#if showFriendRequestModal}
     <FriendRequestModal
       {friendRequestManager}
-      {language}
+      language={language}
       on:close={handleCloseFriendRequestModal}
       on:friendRequestSent={handleSendFriendRequest}
     />
@@ -2739,7 +2767,7 @@
       friendRequest={selectedFriendRequest}
       profileData={selectedProfileData}
       {friendRequestManager}
-      {language}
+      language={language}
       on:close={handleCloseProfileModal}
       on:decline={handleDeclineFriendRequest}
       on:accept={handleAcceptFriendRequest}
@@ -2923,57 +2951,85 @@
   }
   
   .primary-button,
-  .secondary-button {
-    padding: 0.5rem 1rem;
+  .secondary-button,
+  .danger-button {
+    padding: 0.6rem 1.2rem;
     border: none;
-    border-radius: 6px;
-    font-size: 0.9rem;
+    border-radius: 8px;
     cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
     transition: opacity 0.2s;
   }
   
   .primary-button {
     background: var(--notification-color);
-    color: white;
+    color: #fff;
   }
   
   .secondary-button {
     background: var(--foreground-color2);
-    color: var(--text-color);
   }
   
-  .primary-button:hover:not(:disabled),
-  .secondary-button:hover {
+  .danger-button {
+    background: #dc3545;
+    color: white;
+  }
+  
+  .primary-button:hover,
+  .secondary-button:hover,
+  .danger-button:hover {
     opacity: 0.8;
   }
   
-  .primary-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .container {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+  
+  .sidebar {
+    width: 280px;
+    min-width: 220px;
+    max-width: 400px;
+    background: var(--foreground-color2);
+    display: flex;
+    flex-direction: column;
+    resize: horizontal;
+    overflow: auto;
+    border-right: 1px solid var(--line-color);
+  }
+  
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--background-color);
+  }
+  
+  .no-friend-selected {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-color);
+    opacity: 0.6;
+    text-align: center;
+    padding: 2rem;
   }
   
   .notification {
     position: fixed;
     bottom: 20px;
-    right: 20px;
+    left: 50%;
+    transform: translateX(-50%);
     background: var(--notification-color);
-    color: white;
-    padding: 1rem 1.5rem;
+    color: #fff;
+    padding: 1rem 2rem;
     border-radius: 8px;
+    z-index: 2000;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    animation: slideIn 0.3s ease-out;
-    z-index: 1000;
-  }
-  
-  @keyframes slideIn {
-    from {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
   }
   
   .session-overlay {
@@ -2982,11 +3038,12 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.7);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 3000;
+    backdrop-filter: blur(5px);
   }
   
   .session-message {
@@ -2995,105 +3052,57 @@
     border-radius: 12px;
     text-align: center;
     max-width: 400px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  }
-  
-  .session-message h2 {
-    margin: 0 0 1rem 0;
-    color: var(--notification-color);
-  }
-  
-  .session-message p {
-    margin: 0 0 1.5rem 0;
-    opacity: 0.8;
-  }
-  
-  .sidebar {
-    display: flex;
-    flex-direction: column;
-    width: 300px;
-    border-right: 1px solid var(--line-color);
-    overflow-y: auto; /* Enable vertical scrolling */
-    max-height: 100%; /* Ensure it doesn't exceed container height */
-    padding-bottom: 10px; /* Add some bottom padding for better scrolling experience */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   }
   
   .header-container {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    background: var(--background-color);
     border-bottom: 1px solid var(--line-color);
   }
   
   .header-buttons {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
     padding-right: 1rem;
+    background: var(--foreground-color1);
   }
 
   .public-identifiers {
     list-style: none;
     padding: 0;
-    margin: 0 0 0.5rem 0;
+    margin: 0.5rem 0;
   }
 
   .public-identifiers li {
-    background: var(--foreground-color1);
-    padding: 0.25rem 0.5rem;
-    margin-bottom: 0.25rem;
+    background: var(--foreground-color2);
+    padding: 0.5rem;
     border-radius: 4px;
-    font-size: 0.85rem;
-  }
-
-  .add-button {
-    background: none;
-    border: 1px solid var(--line-color);
-    border-radius: 4px;
-    padding: 0.25rem 0.5rem;
-    cursor: pointer;
-    font-size: 1rem;
-    line-height: 1;
+    margin-bottom: 0.5rem;
   }
 
   .public-id-input {
     display: flex;
     gap: 0.5rem;
-    margin-top: 0.25rem;
   }
-
-  .public-id-input input {
-    flex: 1;
-  }
-
+  .public-id-input input { flex: 1; }
   .confirm-button {
     background: var(--notification-color);
+    color: #fff;
     border: none;
-    color: var(--background-color);
-    padding: 0 0.6rem;
     border-radius: 4px;
+    padding: 0 0.75rem;
     cursor: pointer;
   }
-
-  .confirm-button:hover {
-    opacity: 0.85;
-  }
-
-  /* Layout für Push-Notification Einstellung */
-  .notification-permission-row {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
+  .add-button {
+    background: var(--foreground-color2);
+    border: 1px solid var(--line-color);
+    border-radius: 50%;
+    width: 1.75rem;
+    height: 1.75rem;
+    cursor: pointer;
+    font-size: 1.2rem;
     margin-top: 0.25rem;
   }
-
-  /* Badge-Stil für Push-Notification-Status */
-  .notification-status-badge {
-    background: var(--foreground-color1);
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.85rem;
-    white-space: nowrap;
+  .add-button:hover, .confirm-button:hover {
+    opacity: 0.8;
   }
-</style> 
+</style>

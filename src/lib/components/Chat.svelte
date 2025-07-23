@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { translations } from '../i18n/translations';
+  import { translations } from '../../i18n/translations';
   import AttachmentView from '../file-handling/AttachmentView.svelte';
   import FileUploader from '../file-handling/FileUploader.svelte';
   import type { FileAttachment } from '../file-handling/types';

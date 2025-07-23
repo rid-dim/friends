@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { translations } from '../i18n/translations';
+  import { translations } from '../../i18n/translations';
   import AccountImageSrc from '../../AccountCreateImage.png';
 
   const dispatch = createEventDispatcher();

@@ -59,7 +59,12 @@ language.subscribe(value => {
 // Store für Übersetzungen abgeleitet von der aktuellen Sprache
 export const t = derived(language, $language => {
   const translate = (key: TranslationKey): string => {
-    return translations[$language][key] || translations.en[key] || key;
+    if (translations[$language] && translations[$language][key]) {
+      return translations[$language][key] as string;
+    }
+    
+    // Fallback auf Englisch oder Schlüsselname
+    return (translations.en[key] as string) || key;
   };
   
   return translate;

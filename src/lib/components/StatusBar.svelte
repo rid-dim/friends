@@ -1,16 +1,12 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { translations } from '../../i18n/translations';
-  
+  import { t } from '../../i18n/i18n';
+
   export let appTitle: string = 'Friends';
   export let connectionStatus: string = 'Disconnected';
-  export let language: string = 'en';
-  
-  $: t = translations[language as keyof typeof translations] || translations.en;
   export let handshakeStatus: string = '';
   export let handshakeCountdown: string = '';
   export let notificationStatus: string = '';
-  export let username: string = '';
   
   const dispatch = createEventDispatcher();
   
@@ -21,26 +17,26 @@
 
 <div class="status-bar">
   <div class="username-container">
-    <button class="settings-button" on:click={openSettings} title="Account Settings">
+    <button class="settings-button" on:click={openSettings} title={$t('accountSettings')}>
       ⚙️
     </button>
   </div>
   
   <h1>{appTitle}
     <sub class="dweb-app-sub">
-      <a href="https://codeberg.org/happybeing/dweb" target="_blank" rel="noopener noreferrer" class="dweb-app-link">{t.dwebApp || 'a dweb app'}</a>
+      <a href="https://codeberg.org/happybeing/dweb" target="_blank" rel="noopener noreferrer" class="dweb-app-link">{$t('dwebApp')}</a>
     </sub>
   </h1>
   
   <div class="status-info">
     <div class="connection-status">
-      <span class="label">{t.status || 'Status'}:</span>
+      <span class="label">{$t('status')}:</span>
       <span class="value">{connectionStatus}</span>
     </div>
     
     {#if handshakeStatus}
       <div class="handshake-status">
-        <span class="label">{t.handshake || 'Handshake'}:</span>
+        <span class="label">{$t('handshake')}:</span>
         <span class="value">{handshakeStatus}</span>
         {#if handshakeCountdown}
           <span class="countdown">{handshakeCountdown}</span>

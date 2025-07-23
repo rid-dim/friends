@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { translations } from '../i18n/translations';
+  import { translations } from '../../i18n/translations';
   import type { Friend } from '../types';
   import AvatarModal from './AvatarModal.svelte';
   

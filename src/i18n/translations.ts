@@ -1,5 +1,17 @@
 // Definiere den Typ für Übersetzungsschlüssel
-export type TranslationKey =
+export type TranslationKey = 
+  // Header translations
+  | 'dwebApp'
+  | 'status'
+  | 'handshake'
+  | 'accountSettings'
+  | 'noConnections'
+  | 'oneConnected'
+  | 'multipleConnected'
+  | 'notificationsActivated'
+  | 'notificationsBlocked'
+  | 'notificationsNotRequested'
+  | 'notificationsNotSupported'
   | 'settings'
   | 'proxy'
   | 'partner'
@@ -40,7 +52,7 @@ export type TranslationKey =
   | 'translatedMessage'
   | 'targetLanguageRequired'
   | 'translationError'
-  // Neue Übersetzungen für Dateianhänge
+  // File attachment translations
   | 'attachFile'
   | 'fileSelected'
   | 'fileDownload'
@@ -50,22 +62,114 @@ export type TranslationKey =
   | 'lightMode'
   | 'darkMode'
   | 'welcome'
-  | 'noFriendSelected';
+  | 'noFriendSelected'
+  // Account Settings
+  | 'profileImage'
+  | 'enterDatamapAddress'
+  | 'themeUrl'
+  | 'enterThemeUrl'
+  | 'language'
+  // Public identifier management
+  | 'publicIdentifier'
+  | 'enterPublicIdentifier'
+  | 'publicIdentifierAdded'
+  | 'publicNameTaken'
+  // Account creation wizard
+  | 'createFriendsAccount'
+  | 'finishAccountCreation'
+  | 'chooseDisplayName'
+  | 'setProfileImageOptional'
+  | 'choosePublicIdentifierOptional'
+  | 'waitingProfileInitialization'
+  | 'creatingPublicIdentifier'
+  | 'noAccountPackageFoundQuestion'
+  | 'settingsUpdated'
+  // Friends
+  | 'addFriend'
+  | 'removeFriend'
+  | 'friendPeerId'
+  | 'enterPeerId'
+  | 'friendName'
+  | 'enterFriendName'
+  | 'selectFriend'
+  | 'peerIdCopied'
+  | 'friendAdded'
+  | 'friendRemoved'
+  // Friend Requests
+  | 'profileId'
+  | 'enterProfileId'
+  | 'profileIdOrPublicIdentifier'
+  | 'enterIdOrIdentifier'
+  | 'findFriend'
+  | 'displayName'
+  | 'enterDisplayName'
+  | 'sendFriendRequest'
+  | 'acceptFriendRequest'
+  | 'friendRequestSent'
+  | 'friendRequestAccepted'
+  | 'waitingForResponse'
+  | 'newFriendRequests'
+  | 'sending'
+  | 'back'
+  | 'cancel'
+  | 'addNewFriend'
+  | 'loadProfile'
+  | 'profilePreview'
+  | 'profileNotFound'
+  | 'errorLoadingProfile'
+  | 'errorSendingRequest'
+  | 'errorAcceptingRequest'
+  // Chat
+  | 'typeMessage'
+  | 'connectFirst'
+  | 'noMessages'
+  | 'waitForFriendOnline'
+  // Connection states
+  | 'notConnected'
+  | 'connecting'
+  | 'initializing'
+  | 'backendError'
+  // Errors
+  | 'connectionError'
+  | 'invalidPeerId'
+  | 'friendExists'
+  // Notifications
+  | 'notificationsEnabled'
+  | 'notificationsDenied'
+  | 'notificationsNotAvailable'
+  | 'requestAgain'
+  | 'pushNotifications'
+  // Session management
+  | 'sessionTransferred'
+  | 'sessionDeactivatedMessage'
+  | 'reload'
+  ;
 
 // Definiere den Typ für die Sprachen
 export type Language = 'en' | 'de' | 'fr' | 'es' | 'bg' | 'ja' | 'ko' | 'zh';
 
 // Definiere den Typ für die Übersetzungstabelle
 export type Translations = {
-  [key in Language]: {
-    [key in TranslationKey]: string;
-  };
+  [lang in Language]: Partial<Record<TranslationKey, string>>;
 };
 
 // Die Übersetzungen für alle unterstützten Sprachen
 export const translations: Translations = {
-  // Englisch
+  // English
   en: {
+    // Header translations
+    dwebApp: 'a dweb app',
+    status: 'Status',
+    handshake: 'Handshake',
+    accountSettings: 'Account Settings',
+    noConnections: 'No connections',
+    oneConnected: '1 friend connected',
+    multipleConnected: '{count} friends connected',
+    notificationsActivated: 'Activated',
+    notificationsBlocked: 'Blocked',
+    notificationsNotRequested: 'Not requested',
+    notificationsNotSupported: 'Not supported',
+    
     settings: 'Settings',
     proxy: 'Proxy:',
     partner: 'Partner:',
@@ -116,12 +220,116 @@ export const translations: Translations = {
     theme: 'Theme',
     lightMode: 'Light Mode',
     darkMode: 'Dark Mode',
+    
+    // Account settings
+    profileImage: 'Profile Image',
+    enterDatamapAddress: 'Enter datamap address',
+    themeUrl: 'Theme URL',
+    enterThemeUrl: 'Enter theme URL',
+    language: 'Language',
+    
+    // Public identifier management
+    publicIdentifier: 'Public Identifier',
+    enterPublicIdentifier: 'Enter public identifier',
+    publicIdentifierAdded: 'Public identifier added',
+    publicNameTaken: 'Public name already taken - please use a different name',
+    
+    // Account creation wizard
+    createFriendsAccount: 'Create Friends Account',
+    finishAccountCreation: 'Finish Account Creation',
+    chooseDisplayName: 'Choose your display name',
+    setProfileImageOptional: 'You can set a profile image here (optional)',
+    choosePublicIdentifierOptional: 'Choose searchable public identifier (optional)',
+    waitingProfileInitialization: 'Please wait while profile is being initialized',
+    creatingPublicIdentifier: 'Creating public identifier...',
+    noAccountPackageFoundQuestion: 'No account package found. Would you like to create one?',
+    
+    settingsUpdated: 'Settings updated successfully',
+    
+    // Friends
+    addFriend: 'Add Friend',
+    removeFriend: 'Remove Friend',
+    friendPeerId: 'Friend\'s Peer ID',
+    enterPeerId: 'Enter Peer ID',
+    friendName: 'Friend\'s Name',
+    enterFriendName: 'Enter name',
+    selectFriend: 'Select a friend',
+    peerIdCopied: 'Friend\'s Peer ID copied!',
+    friendAdded: 'Friend added',
+    friendRemoved: 'Friend removed',
+    
+    // Friend Requests
+    profileId: 'Profile ID',
+    enterProfileId: 'Enter friend\'s Profile ID',
+    profileIdOrPublicIdentifier: 'Profile ID or public identifier',
+    enterIdOrIdentifier: 'Enter Profile ID or public identifier',
+    findFriend: 'Find Friend',
+    displayName: 'Display Name',
+    enterDisplayName: 'Enter display name for this contact',
+    sendFriendRequest: 'Send Friend Request',
+    acceptFriendRequest: 'Accept Friend Request',
+    friendRequestSent: 'Friend request sent',
+    friendRequestAccepted: 'Friend request accepted',
+    waitingForResponse: 'Waiting for response...',
+    newFriendRequests: 'New friend requests',
+    sending: 'Sending...',
+    back: 'Back',
+    cancel: 'Cancel',
+    addNewFriend: 'Add New Friend',
+    loadProfile: 'Load Profile',
+    profilePreview: 'Profile Preview',
+    profileNotFound: 'Profile not found',
+    errorLoadingProfile: 'Error loading profile',
+    errorSendingRequest: 'Error sending friend request',
+    errorAcceptingRequest: 'Error accepting friend request',
+    
+    // Chat
+    typeMessage: 'Type a message...',
+    connectFirst: 'Connect first to send messages',
+    noMessages: 'No messages yet. Start a conversation!',
+    waitForFriendOnline: 'Cannot send messages - waiting for friend to come online',
+    
+    // Connection states
+    notConnected: 'Not Connected',
+    connecting: 'Connecting...',
+    initializing: 'Initializing...',
+    backendError: 'Backend error',
+    
+    // Notifications
+    notificationsEnabled: 'Push notifications enabled',
+    notificationsDenied: 'Push notifications denied',
+    notificationsNotAvailable: 'Push notifications not available',
+    requestAgain: 'Request again',
+    pushNotifications: 'Push Notifications',
+    
+    // Errors
+    connectionError: 'Connection error',
+    invalidPeerId: 'Invalid Peer ID',
+    friendExists: 'Friend already exists',
+    
+    // Session management
+    sessionTransferred: 'Session transferred to new app instance',
+    sessionDeactivatedMessage: 'This app instance has been deactivated because another instance was opened.',
+    reload: 'Reload',
     welcome: 'Welcome to P2P Chat!',
     noFriendSelected: 'Select a friend on the left to start chatting.'
   },
   
   // Deutsch
   de: {
+    // Header translations
+    dwebApp: 'eine dweb App',
+    status: 'Status',
+    handshake: 'Handshake',
+    accountSettings: 'Kontoeinstellungen',
+    noConnections: 'Keine Verbindungen',
+    oneConnected: '1 Freund verbunden',
+    multipleConnected: '{count} Freunde verbunden',
+    notificationsActivated: 'Aktiviert',
+    notificationsBlocked: 'Blockiert',
+    notificationsNotRequested: 'Nicht angefragt',
+    notificationsNotSupported: 'Nicht unterstützt',
+    
     settings: 'Einstellungen',
     proxy: 'Proxy:',
     partner: 'Kommunikationspartner:',
@@ -172,12 +380,116 @@ export const translations: Translations = {
     theme: 'Thema',
     lightMode: 'Heller Modus',
     darkMode: 'Dunkler Modus',
+    
+    // Account settings
+    profileImage: 'Profilbild',
+    enterDatamapAddress: 'Datamap-Adresse eingeben',
+    themeUrl: 'Theme URL',
+    enterThemeUrl: 'Theme URL eingeben',
+    language: 'Sprache',
+    
+    // Public identifier management
+    publicIdentifier: 'Öffentlicher Name',
+    enterPublicIdentifier: 'Öffentlichen Namen eingeben',
+    publicIdentifierAdded: 'Öffentlicher Name hinzugefügt',
+    publicNameTaken: 'Öffentlicher Name bereits vergeben - bitte einen anderen wählen',
+    
+    // Account creation wizard
+    createFriendsAccount: 'Friends-Konto erstellen',
+    finishAccountCreation: 'Kontoeinrichtung abschließen',
+    chooseDisplayName: 'Wähle deinen Anzeigenamen',
+    setProfileImageOptional: 'Du kannst hier ein Profilbild einstellen (optional)',
+    choosePublicIdentifierOptional: 'Wähle einen öffentlich suchbaren Namen (optional)',
+    waitingProfileInitialization: 'Bitte warten, Profil wird initialisiert',
+    creatingPublicIdentifier: 'Öffentlicher Name wird erstellt...',
+    noAccountPackageFoundQuestion: 'Kein Account-Paket gefunden. Möchtest du eines erstellen?',
+    
+    settingsUpdated: 'Einstellungen erfolgreich aktualisiert',
+    
+    // Friends
+    addFriend: 'Freund hinzufügen',
+    removeFriend: 'Freund entfernen',
+    friendPeerId: 'Peer ID des Freundes',
+    enterPeerId: 'Peer ID eingeben',
+    friendName: 'Name des Freundes',
+    enterFriendName: 'Namen eingeben',
+    selectFriend: 'Wähle einen Freund aus',
+    peerIdCopied: 'Peer ID des Freundes kopiert!',
+    friendAdded: 'Freund hinzugefügt',
+    friendRemoved: 'Freund entfernt',
+    
+    // Friend Requests
+    profileId: 'Profil-ID',
+    enterProfileId: 'Profil-ID des Freundes eingeben',
+    profileIdOrPublicIdentifier: 'Profil-ID oder öffentlicher Name',
+    enterIdOrIdentifier: 'Profil-ID oder öffentlichen Namen eingeben',
+    findFriend: 'Freund finden',
+    displayName: 'Anzeigename',
+    enterDisplayName: 'Anzeigenamen für diesen Kontakt eingeben',
+    sendFriendRequest: 'Freundschaftsanfrage senden',
+    acceptFriendRequest: 'Freundschaftsanfrage annehmen',
+    friendRequestSent: 'Freundschaftsanfrage gesendet',
+    friendRequestAccepted: 'Freundschaftsanfrage angenommen',
+    waitingForResponse: 'Warte auf Antwort...',
+    newFriendRequests: 'Neue Freundschaftsanfragen',
+    sending: 'Sende...',
+    back: 'Zurück',
+    cancel: 'Abbrechen',
+    addNewFriend: 'Neuen Freund hinzufügen',
+    loadProfile: 'Profil laden',
+    profilePreview: 'Profilvorschau',
+    profileNotFound: 'Profil nicht gefunden',
+    errorLoadingProfile: 'Fehler beim Laden des Profils',
+    errorSendingRequest: 'Fehler beim Senden der Freundschaftsanfrage',
+    errorAcceptingRequest: 'Fehler beim Annehmen der Freundschaftsanfrage',
+    
+    // Chat
+    typeMessage: 'Nachricht eingeben...',
+    connectFirst: 'Verbinde dich zuerst, um Nachrichten zu senden',
+    noMessages: 'Noch keine Nachrichten. Starte eine Unterhaltung!',
+    waitForFriendOnline: 'Nachrichten können nicht gesendet werden - warte bis der Freund online kommt',
+    
+    // Connection states
+    notConnected: 'Nicht verbunden',
+    connecting: 'Verbinde...',
+    initializing: 'Initialisiere...',
+    backendError: 'Backend-Fehler',
+    
+    // Notifications
+    notificationsEnabled: 'Push-Notifications aktiviert',
+    notificationsDenied: 'Push-Notifications wurden abgelehnt',
+    notificationsNotAvailable: 'Push-Notifications nicht verfügbar',
+    requestAgain: 'Erneut anfragen',
+    pushNotifications: 'Push-Benachrichtigungen',
+    
+    // Errors
+    connectionError: 'Verbindungsfehler',
+    invalidPeerId: 'Ungültige Peer ID',
+    friendExists: 'Freund existiert bereits',
+    
+    // Session management
+    sessionTransferred: 'Session zu neuer App-Instanz übertragen',
+    sessionDeactivatedMessage: 'Diese App-Instanz wurde deaktiviert, da eine andere Instanz geöffnet wurde.',
+    reload: 'Neu laden',
     welcome: 'Willkommen bei P2P Chat!',
-    noFriendSelected: 'Wähle links einen Freund aus, um den Chat zu starten.'  
+    noFriendSelected: 'Wähle links einen Freund aus, um zu chatten.'
   },
   
   // Französisch
   fr: {
+    // Header translations
+    dwebApp: 'une app dweb',
+    status: 'État',
+    handshake: 'Négociation',
+    accountSettings: 'Paramètres du compte',
+    noConnections: 'Pas de connexions',
+    oneConnected: '1 ami connecté',
+    multipleConnected: '{count} amis connectés',
+    notificationsActivated: 'Activées',
+    notificationsBlocked: 'Bloquées',
+    notificationsNotRequested: 'Non demandées',
+    notificationsNotSupported: 'Non supportées',
+    
     settings: 'Paramètres',
     proxy: 'Proxy:',
     partner: 'Partenaire:',
@@ -228,12 +540,43 @@ export const translations: Translations = {
     theme: 'Thème',
     lightMode: 'Mode clair',
     darkMode: 'Mode sombre',
-    welcome: '',
-    noFriendSelected: ''
+    
+    // Account settings
+    profileImage: 'Image de profil',
+    enterDatamapAddress: 'Entrer l\'adresse datamap',
+    themeUrl: 'URL du thème',
+    enterThemeUrl: 'Entrer l\'URL du thème',
+    language: 'Langue',
+    settingsUpdated: 'Paramètres mis à jour avec succès',
+    
+    // Friends
+    addFriend: 'Ajouter un ami',
+    removeFriend: 'Supprimer l\'ami',
+    friendPeerId: 'ID Peer de l\'ami',
+    enterPeerId: 'Entrer l\'ID Peer',
+    friendName: 'Nom de l\'ami',
+    enterFriendName: 'Entrer le nom',
+    selectFriend: 'Sélectionner un ami',
+    
+    welcome: 'Bienvenue sur P2P Chat!',
+    noFriendSelected: 'Sélectionnez un ami à gauche pour commencer à discuter.'
   },
   
   // Spanisch
   es: {
+    // Header translations
+    dwebApp: 'una app dweb',
+    status: 'Estado',
+    handshake: 'Negociación',
+    accountSettings: 'Configuración de la cuenta',
+    noConnections: 'Sin conexiones',
+    oneConnected: '1 amigo conectado',
+    multipleConnected: '{count} amigos conectados',
+    notificationsActivated: 'Activadas',
+    notificationsBlocked: 'Bloqueadas',
+    notificationsNotRequested: 'No solicitadas',
+    notificationsNotSupported: 'No soportadas',
+    
     settings: 'Configuraciones',
     proxy: 'Proxy:',
     partner: 'Compañero:',
@@ -284,12 +627,26 @@ export const translations: Translations = {
     theme: 'Tema',
     lightMode: 'Modo claro',
     darkMode: 'Modo oscuro',
-    welcome: '',
-    noFriendSelected: ''
+    
+    welcome: 'Bienvenido a P2P Chat!',
+    noFriendSelected: 'Seleccione un amigo a la izquierda para comenzar a chatear.'
   },
   
   // Bulgarisch
   bg: {
+    // Header translations
+    dwebApp: 'dweb приложение',
+    status: 'Статус',
+    handshake: 'Установяване на връзка',
+    accountSettings: 'Настройки на акаунта',
+    noConnections: 'Няма връзки',
+    oneConnected: '1 свързан приятел',
+    multipleConnected: '{count} свързани приятели',
+    notificationsActivated: 'Активирани',
+    notificationsBlocked: 'Блокирани',
+    notificationsNotRequested: 'Не са поискани',
+    notificationsNotSupported: 'Не се поддържат',
+    
     settings: 'Настройки',
     proxy: 'Прокси:',
     partner: 'Партньор:',
@@ -340,12 +697,26 @@ export const translations: Translations = {
     theme: 'Тема',
     lightMode: 'Светъл режим',
     darkMode: 'Тъмрен режим',
-    welcome: '',
-    noFriendSelected: ''
+    
+    welcome: 'Добре дошли в P2P Chat!',
+    noFriendSelected: 'Изберете приятел отляво, за да започнете разговор.'
   },
   
   // Japanisch
   ja: {
+    // Header translations
+    dwebApp: 'dwebアプリ',
+    status: '状態',
+    handshake: 'ハンドシェイク',
+    accountSettings: 'アカウント設定',
+    noConnections: '接続なし',
+    oneConnected: '1人のフレンドが接続中',
+    multipleConnected: '{count}人のフレンドが接続中',
+    notificationsActivated: '有効',
+    notificationsBlocked: 'ブロック',
+    notificationsNotRequested: '未要求',
+    notificationsNotSupported: '非対応',
+    
     settings: '設定',
     proxy: 'プロキシ:',
     partner: 'パートナー:',
@@ -396,12 +767,26 @@ export const translations: Translations = {
     theme: 'テーマ',
     lightMode: 'ライトモード',
     darkMode: 'ダークモード',
-    welcome: '',
-    noFriendSelected: ''
+    
+    welcome: 'P2P Chatへようこそ！',
+    noFriendSelected: '左側の友達を選択して、チャットを開始してください。'
   },
   
   // Koreanisch
   ko: {
+    // Header translations
+    dwebApp: 'dweb 앱',
+    status: '상태',
+    handshake: '핸드셰이크',
+    accountSettings: '계정 설정',
+    noConnections: '연결 없음',
+    oneConnected: '1명의 친구 연결됨',
+    multipleConnected: '{count}명의 친구 연결됨',
+    notificationsActivated: '활성화됨',
+    notificationsBlocked: '차단됨',
+    notificationsNotRequested: '요청되지 않음',
+    notificationsNotSupported: '지원되지 않음',
+    
     settings: '설정',
     proxy: '프록시:',
     partner: '파트너:',
@@ -452,12 +837,26 @@ export const translations: Translations = {
     theme: '테마',
     lightMode: '라이트 모드',
     darkMode: '다크 모드',
-    welcome: '',
-    noFriendSelected: ''
+    
+    welcome: 'P2P Chat에 오신 것을 환영합니다!',
+    noFriendSelected: '왼쪽에서 친구를 선택하여 채팅을 시작하세요.'
   },
   
   // Mandarin
   zh: {
+    // Header translations
+    dwebApp: 'dweb应用',
+    status: '状态',
+    handshake: '握手',
+    accountSettings: '账户设置',
+    noConnections: '无连接',
+    oneConnected: '1个好友已连接',
+    multipleConnected: '{count}个好友已连接',
+    notificationsActivated: '已激活',
+    notificationsBlocked: '已阻止',
+    notificationsNotRequested: '未请求',
+    notificationsNotSupported: '不支持',
+    
     settings: '设置',
     proxy: '代理:',
     partner: '伙伴:',
@@ -508,8 +907,9 @@ export const translations: Translations = {
     theme: '主题',
     lightMode: '亮模式',
     darkMode: '暗模式',
-    welcome: '',
-    noFriendSelected: ''
+    
+    welcome: '欢迎使用P2P聊天！',
+    noFriendSelected: '选择左侧的朋友开始聊天。'
   }
 };
 
@@ -542,6 +942,16 @@ export function validateTranslations(): string[] {
   return errors;
 }
 
+// Fallback-Funktion: liefert Übersetzung oder englischen Text wenn nicht vorhanden
+export function getTranslation(lang: Language, key: TranslationKey): string {
+  if (translations[lang] && translations[lang][key]) {
+    return translations[lang][key] as string;
+  }
+  
+  // Fallback auf Englisch
+  return translations.en[key] as string;
+}
+
 // Führe die Validierung während der Entwicklung aus
 if (import.meta.env.DEV) {
   const errors = validateTranslations();
@@ -549,4 +959,4 @@ if (import.meta.env.DEV) {
     console.error('Translation validation errors:');
     errors.forEach(error => console.error(error));
   }
-} 
+}

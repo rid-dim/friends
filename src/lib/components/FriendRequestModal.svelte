@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { translations } from '../i18n/translations';
+  import { translations } from '../../i18n/translations';
   import type { ProfileData } from '../webrtc/FriendRequestManager';
   
   export let language: 'en' | 'de' | 'fr' | 'es' | 'bg' | 'ja' | 'ko' | 'zh' = 'en';
