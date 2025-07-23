@@ -143,6 +143,7 @@ export type TranslationKey =
   | 'sessionTransferred'
   | 'sessionDeactivatedMessage'
   | 'reload'
+  | 'close'
   ;
 
 // Definiere den Typ für die Sprachen
@@ -311,6 +312,7 @@ export const translations: Translations = {
     sessionTransferred: 'Session transferred to new app instance',
     sessionDeactivatedMessage: 'This app instance has been deactivated because another instance was opened.',
     reload: 'Reload',
+    close: 'Close',
     welcome: 'Welcome to P2P Chat!',
     noFriendSelected: 'Select a friend on the left to start chatting.'
   },
@@ -471,6 +473,7 @@ export const translations: Translations = {
     sessionTransferred: 'Session zu neuer App-Instanz übertragen',
     sessionDeactivatedMessage: 'Diese App-Instanz wurde deaktiviert, da eine andere Instanz geöffnet wurde.',
     reload: 'Neu laden',
+    close: 'Schließen',
     welcome: 'Willkommen bei P2P Chat!',
     noFriendSelected: 'Wähle links einen Freund aus, um zu chatten.'
   },
@@ -549,6 +552,22 @@ export const translations: Translations = {
     language: 'Langue',
     settingsUpdated: 'Paramètres mis à jour avec succès',
     
+    // Public identifier management
+    publicIdentifier: 'Identifiant public',
+    enterPublicIdentifier: 'Entrez un identifiant public',
+    publicIdentifierAdded: 'Identifiant public ajouté',
+    publicNameTaken: 'Nom public déjà pris - veuillez utiliser un autre nom',
+    
+    // Account creation wizard
+    createFriendsAccount: 'Créer un compte Friends',
+    finishAccountCreation: 'Terminer la création du compte',
+    chooseDisplayName: 'Choisissez votre nom d\'affichage',
+    setProfileImageOptional: 'Vous pouvez définir une image de profil ici (facultatif)',
+    choosePublicIdentifierOptional: 'Choisissez un identifiant public consultable (facultatif)',
+    waitingProfileInitialization: 'Veuillez patienter pendant l\'initialisation du profil',
+    creatingPublicIdentifier: 'Création de l\'identifiant public...',
+    noAccountPackageFoundQuestion: 'Aucun package de compte trouvé. Voulez-vous en créer un?',
+    
     // Friends
     addFriend: 'Ajouter un ami',
     removeFriend: 'Supprimer l\'ami',
@@ -557,6 +576,64 @@ export const translations: Translations = {
     friendName: 'Nom de l\'ami',
     enterFriendName: 'Entrer le nom',
     selectFriend: 'Sélectionner un ami',
+    peerIdCopied: 'ID Peer de l\'ami copié!',
+    friendAdded: 'Ami ajouté',
+    friendRemoved: 'Ami supprimé',
+    
+    // Friend Requests
+    profileId: 'ID de profil',
+    enterProfileId: 'Entrez l\'ID de profil de l\'ami',
+    profileIdOrPublicIdentifier: 'ID de profil ou identifiant public',
+    enterIdOrIdentifier: 'Entrez l\'ID de profil ou l\'identifiant public',
+    findFriend: 'Trouver un ami',
+    displayName: 'Nom d\'affichage',
+    enterDisplayName: 'Entrez le nom d\'affichage pour ce contact',
+    sendFriendRequest: 'Envoyer une demande d\'ami',
+    acceptFriendRequest: 'Accepter la demande d\'ami',
+    friendRequestSent: 'Demande d\'ami envoyée',
+    friendRequestAccepted: 'Demande d\'ami acceptée',
+    waitingForResponse: 'En attente de réponse...',
+    newFriendRequests: 'Nouvelles demandes d\'ami',
+    sending: 'Envoi en cours...',
+    back: 'Retour',
+    cancel: 'Annuler',
+    addNewFriend: 'Ajouter un nouvel ami',
+    loadProfile: 'Charger le profil',
+    profilePreview: 'Aperçu du profil',
+    profileNotFound: 'Profil non trouvé',
+    errorLoadingProfile: 'Erreur lors du chargement du profil',
+    errorSendingRequest: 'Erreur lors de l\'envoi de la demande d\'ami',
+    errorAcceptingRequest: 'Erreur lors de l\'acceptation de la demande d\'ami',
+    
+    // Chat
+    typeMessage: 'Tapez un message...',
+    connectFirst: 'Connectez-vous d\'abord pour envoyer des messages',
+    noMessages: 'Pas encore de messages. Commencez une conversation!',
+    waitForFriendOnline: 'Impossible d\'envoyer des messages - en attente que l\'ami se connecte',
+    
+    // Connection states
+    notConnected: 'Non connecté',
+    connecting: 'Connexion en cours...',
+    initializing: 'Initialisation...',
+    backendError: 'Erreur de backend',
+    
+    // Notifications
+    notificationsEnabled: 'Notifications push activées',
+    notificationsDenied: 'Notifications push refusées',
+    notificationsNotAvailable: 'Notifications push non disponibles',
+    requestAgain: 'Demander à nouveau',
+    pushNotifications: 'Notifications push',
+    
+    // Errors
+    connectionError: 'Erreur de connexion',
+    invalidPeerId: 'ID Peer invalide',
+    friendExists: 'L\'ami existe déjà',
+    
+    // Session management
+    sessionTransferred: 'Session transférée vers une nouvelle instance d\'application',
+    sessionDeactivatedMessage: 'Cette instance d\'application a été désactivée car une autre instance a été ouverte.',
+    reload: 'Recharger',
+    close: 'Fermer',
     
     welcome: 'Bienvenue sur P2P Chat!',
     noFriendSelected: 'Sélectionnez un ami à gauche pour commencer à discuter.'
@@ -628,6 +705,97 @@ export const translations: Translations = {
     lightMode: 'Modo claro',
     darkMode: 'Modo oscuro',
     
+    // Account settings
+    profileImage: 'Imagen de perfil',
+    enterDatamapAddress: 'Introducir dirección de datamap',
+    themeUrl: 'URL del tema',
+    enterThemeUrl: 'Introducir URL del tema',
+    language: 'Idioma',
+    
+    // Public identifier management
+    publicIdentifier: 'Identificador público',
+    enterPublicIdentifier: 'Introducir identificador público',
+    publicIdentifierAdded: 'Identificador público añadido',
+    publicNameTaken: 'Nombre público ya en uso - por favor use un nombre diferente',
+    
+    // Account creation wizard
+    createFriendsAccount: 'Crear cuenta de Friends',
+    finishAccountCreation: 'Finalizar creación de cuenta',
+    chooseDisplayName: 'Elija su nombre para mostrar',
+    setProfileImageOptional: 'Puede establecer una imagen de perfil aquí (opcional)',
+    choosePublicIdentifierOptional: 'Elija un identificador público buscable (opcional)',
+    waitingProfileInitialization: 'Por favor espere mientras se inicializa el perfil',
+    creatingPublicIdentifier: 'Creando identificador público...',
+    noAccountPackageFoundQuestion: 'No se encontró paquete de cuenta. ¿Desea crear uno?',
+    settingsUpdated: 'Configuración actualizada con éxito',
+    
+    // Friends
+    addFriend: 'Añadir amigo',
+    removeFriend: 'Eliminar amigo',
+    friendPeerId: 'ID Peer del amigo',
+    enterPeerId: 'Introducir ID Peer',
+    friendName: 'Nombre del amigo',
+    enterFriendName: 'Introducir nombre',
+    selectFriend: 'Seleccionar un amigo',
+    peerIdCopied: '¡ID Peer del amigo copiado!',
+    friendAdded: 'Amigo añadido',
+    friendRemoved: 'Amigo eliminado',
+    
+    // Friend Requests
+    profileId: 'ID de perfil',
+    enterProfileId: 'Introducir ID de perfil del amigo',
+    profileIdOrPublicIdentifier: 'ID de perfil o identificador público',
+    enterIdOrIdentifier: 'Introducir ID de perfil o identificador público',
+    findFriend: 'Encontrar amigo',
+    displayName: 'Nombre para mostrar',
+    enterDisplayName: 'Introducir nombre para mostrar para este contacto',
+    sendFriendRequest: 'Enviar solicitud de amistad',
+    acceptFriendRequest: 'Aceptar solicitud de amistad',
+    friendRequestSent: 'Solicitud de amistad enviada',
+    friendRequestAccepted: 'Solicitud de amistad aceptada',
+    waitingForResponse: 'Esperando respuesta...',
+    newFriendRequests: 'Nuevas solicitudes de amistad',
+    sending: 'Enviando...',
+    back: 'Atrás',
+    cancel: 'Cancelar',
+    addNewFriend: 'Añadir nuevo amigo',
+    loadProfile: 'Cargar perfil',
+    profilePreview: 'Vista previa del perfil',
+    profileNotFound: 'Perfil no encontrado',
+    errorLoadingProfile: 'Error al cargar el perfil',
+    errorSendingRequest: 'Error al enviar la solicitud de amistad',
+    errorAcceptingRequest: 'Error al aceptar la solicitud de amistad',
+    
+    // Chat
+    typeMessage: 'Escriba un mensaje...',
+    connectFirst: 'Conéctese primero para enviar mensajes',
+    noMessages: 'No hay mensajes aún. ¡Comience una conversación!',
+    waitForFriendOnline: 'No se pueden enviar mensajes - esperando a que el amigo se conecte',
+    
+    // Connection states
+    notConnected: 'No conectado',
+    connecting: 'Conectando...',
+    initializing: 'Inicializando...',
+    backendError: 'Error de backend',
+    
+    // Notifications
+    notificationsEnabled: 'Notificaciones push habilitadas',
+    notificationsDenied: 'Notificaciones push denegadas',
+    notificationsNotAvailable: 'Notificaciones push no disponibles',
+    requestAgain: 'Solicitar de nuevo',
+    pushNotifications: 'Notificaciones push',
+    
+    // Errors
+    connectionError: 'Error de conexión',
+    invalidPeerId: 'ID Peer inválido',
+    friendExists: 'El amigo ya existe',
+    
+    // Session management
+    sessionTransferred: 'Sesión transferida a una nueva instancia de la aplicación',
+    sessionDeactivatedMessage: 'Esta instancia de la aplicación ha sido desactivada porque se abrió otra instancia.',
+    reload: 'Recargar',
+    close: 'Cerrar',
+    
     welcome: 'Bienvenido a P2P Chat!',
     noFriendSelected: 'Seleccione un amigo a la izquierda para comenzar a chatear.'
   },
@@ -697,6 +865,97 @@ export const translations: Translations = {
     theme: 'Тема',
     lightMode: 'Светъл режим',
     darkMode: 'Тъмрен режим',
+    
+    // Account settings
+    profileImage: 'Профилна снимка',
+    enterDatamapAddress: 'Въведете адрес на datamap',
+    themeUrl: 'URL на темата',
+    enterThemeUrl: 'Въведете URL на темата',
+    language: 'Език',
+    
+    // Public identifier management
+    publicIdentifier: 'Публичен идентификатор',
+    enterPublicIdentifier: 'Въведете публичен идентификатор',
+    publicIdentifierAdded: 'Публичният идентификатор е добавен',
+    publicNameTaken: 'Публичното име вече се използва - моля, използвайте друго име',
+    
+    // Account creation wizard
+    createFriendsAccount: 'Създаване на профил във Friends',
+    finishAccountCreation: 'Завършване на създаването на профил',
+    chooseDisplayName: 'Изберете име за показване',
+    setProfileImageOptional: 'Можете да зададете профилна снимка тук (по избор)',
+    choosePublicIdentifierOptional: 'Изберете публичен идентификатор за търсене (по избор)',
+    waitingProfileInitialization: 'Моля, изчакайте докато профилът се инициализира',
+    creatingPublicIdentifier: 'Създаване на публичен идентификатор...',
+    noAccountPackageFoundQuestion: 'Не е намерен пакет за акаунт. Искате ли да създадете такъв?',
+    settingsUpdated: 'Настройките са актуализирани успешно',
+    
+    // Friends
+    addFriend: 'Добавяне на приятел',
+    removeFriend: 'Премахване на приятел',
+    friendPeerId: 'Peer ID на приятеля',
+    enterPeerId: 'Въведете Peer ID',
+    friendName: 'Име на приятеля',
+    enterFriendName: 'Въведете име',
+    selectFriend: 'Изберете приятел',
+    peerIdCopied: 'Peer ID на приятеля е копирано!',
+    friendAdded: 'Приятелят е добавен',
+    friendRemoved: 'Приятелят е премахнат',
+    
+    // Friend Requests
+    profileId: 'ID на профила',
+    enterProfileId: 'Въведете ID на профила на приятеля',
+    profileIdOrPublicIdentifier: 'ID на профила или публичен идентификатор',
+    enterIdOrIdentifier: 'Въведете ID на профила или публичен идентификатор',
+    findFriend: 'Намери приятел',
+    displayName: 'Име за показване',
+    enterDisplayName: 'Въведете име за показване за този контакт',
+    sendFriendRequest: 'Изпращане на заявка за приятелство',
+    acceptFriendRequest: 'Приемане на заявка за приятелство',
+    friendRequestSent: 'Заявката за приятелство е изпратена',
+    friendRequestAccepted: 'Заявката за приятелство е приета',
+    waitingForResponse: 'Изчакване на отговор...',
+    newFriendRequests: 'Нови заявки за приятелство',
+    sending: 'Изпращане...',
+    back: 'Назад',
+    cancel: 'Отказ',
+    addNewFriend: 'Добавяне на нов приятел',
+    loadProfile: 'Зареждане на профил',
+    profilePreview: 'Преглед на профила',
+    profileNotFound: 'Профилът не е намерен',
+    errorLoadingProfile: 'Грешка при зареждане на профила',
+    errorSendingRequest: 'Грешка при изпращане на заявка за приятелство',
+    errorAcceptingRequest: 'Грешка при приемане на заявка за приятелство',
+    
+    // Chat
+    typeMessage: 'Напишете съобщение...',
+    connectFirst: 'Първо се свържете, за да изпращате съобщения',
+    noMessages: 'Все още няма съобщения. Започнете разговор!',
+    waitForFriendOnline: 'Не могат да се изпращат съобщения - изчакване приятелят да се свърже',
+    
+    // Connection states
+    notConnected: 'Не е свързано',
+    connecting: 'Свързване...',
+    initializing: 'Инициализиране...',
+    backendError: 'Грешка в бекенда',
+    
+    // Notifications
+    notificationsEnabled: 'Push известията са активирани',
+    notificationsDenied: 'Push известията са отказани',
+    notificationsNotAvailable: 'Push известията не са налични',
+    requestAgain: 'Поискайте отново',
+    pushNotifications: 'Push известия',
+    
+    // Errors
+    connectionError: 'Грешка при свързване',
+    invalidPeerId: 'Невалиден Peer ID',
+    friendExists: 'Приятелят вече съществува',
+    
+    // Session management
+    sessionTransferred: 'Сесията е прехвърлена към нова инстанция на приложението',
+    sessionDeactivatedMessage: 'Тази инстанция на приложението е деактивирана, защото е отворена друга инстанция.',
+    reload: 'Презареждане',
+    close: 'Затваряне',
     
     welcome: 'Добре дошли в P2P Chat!',
     noFriendSelected: 'Изберете приятел отляво, за да започнете разговор.'
@@ -768,6 +1027,97 @@ export const translations: Translations = {
     lightMode: 'ライトモード',
     darkMode: 'ダークモード',
     
+    // Account settings
+    profileImage: 'プロフィール画像',
+    enterDatamapAddress: 'データマップアドレスを入力',
+    themeUrl: 'テーマURL',
+    enterThemeUrl: 'テーマURLを入力',
+    language: '言語',
+    
+    // Public identifier management
+    publicIdentifier: '公開識別子',
+    enterPublicIdentifier: '公開識別子を入力',
+    publicIdentifierAdded: '公開識別子が追加されました',
+    publicNameTaken: '公開名はすでに使用されています - 別の名前を使用してください',
+    
+    // Account creation wizard
+    createFriendsAccount: 'Friendsアカウントを作成',
+    finishAccountCreation: 'アカウント作成を完了',
+    chooseDisplayName: '表示名を選択してください',
+    setProfileImageOptional: 'プロフィール画像を設定できます（オプション）',
+    choosePublicIdentifierOptional: '検索可能な公開識別子を選択してください（オプション）',
+    waitingProfileInitialization: 'プロフィールの初期化中です。お待ちください',
+    creatingPublicIdentifier: '公開識別子を作成中...',
+    noAccountPackageFoundQuestion: 'アカウントパッケージが見つかりません。作成しますか？',
+    settingsUpdated: '設定が正常に更新されました',
+    
+    // Friends
+    addFriend: '友達を追加',
+    removeFriend: '友達を削除',
+    friendPeerId: '友達のピアID',
+    enterPeerId: 'ピアIDを入力',
+    friendName: '友達の名前',
+    enterFriendName: '名前を入力',
+    selectFriend: '友達を選択',
+    peerIdCopied: '友達のピアIDをコピーしました！',
+    friendAdded: '友達を追加しました',
+    friendRemoved: '友達を削除しました',
+    
+    // Friend Requests
+    profileId: 'プロフィールID',
+    enterProfileId: '友達のプロフィールIDを入力',
+    profileIdOrPublicIdentifier: 'プロフィールIDまたは公開識別子',
+    enterIdOrIdentifier: 'プロフィールIDまたは公開識別子を入力',
+    findFriend: '友達を見つける',
+    displayName: '表示名',
+    enterDisplayName: 'この連絡先の表示名を入力',
+    sendFriendRequest: '友達リクエストを送信',
+    acceptFriendRequest: '友達リクエストを承認',
+    friendRequestSent: '友達リクエストを送信しました',
+    friendRequestAccepted: '友達リクエストを承認しました',
+    waitingForResponse: '応答待ち...',
+    newFriendRequests: '新しい友達リクエスト',
+    sending: '送信中...',
+    back: '戻る',
+    cancel: 'キャンセル',
+    addNewFriend: '新しい友達を追加',
+    loadProfile: 'プロフィールを読み込む',
+    profilePreview: 'プロフィールプレビュー',
+    profileNotFound: 'プロフィールが見つかりません',
+    errorLoadingProfile: 'プロフィールの読み込みエラー',
+    errorSendingRequest: '友達リクエストの送信エラー',
+    errorAcceptingRequest: '友達リクエストの承認エラー',
+    
+    // Chat
+    typeMessage: 'メッセージを入力...',
+    connectFirst: 'メッセージを送信するには接続してください',
+    noMessages: 'まだメッセージはありません。会話を始めましょう！',
+    waitForFriendOnline: 'メッセージを送信できません - 友達がオンラインになるのを待っています',
+    
+    // Connection states
+    notConnected: '未接続',
+    connecting: '接続中...',
+    initializing: '初期化中...',
+    backendError: 'バックエンドエラー',
+    
+    // Notifications
+    notificationsEnabled: 'プッシュ通知が有効',
+    notificationsDenied: 'プッシュ通知が拒否されました',
+    notificationsNotAvailable: 'プッシュ通知は利用できません',
+    requestAgain: '再度リクエスト',
+    pushNotifications: 'プッシュ通知',
+    
+    // Errors
+    connectionError: '接続エラー',
+    invalidPeerId: '無効なピアID',
+    friendExists: '友達はすでに存在します',
+    
+    // Session management
+    sessionTransferred: 'セッションが新しいアプリインスタンスに転送されました',
+    sessionDeactivatedMessage: '別のインスタンスが開かれたため、このアプリインスタンスは無効化されました。',
+    reload: '再読み込み',
+    close: '閉じる',
+    
     welcome: 'P2P Chatへようこそ！',
     noFriendSelected: '左側の友達を選択して、チャットを開始してください。'
   },
@@ -838,6 +1188,97 @@ export const translations: Translations = {
     lightMode: '라이트 모드',
     darkMode: '다크 모드',
     
+    // Account settings
+    profileImage: '프로필 이미지',
+    enterDatamapAddress: '데이터맵 주소 입력',
+    themeUrl: '테마 URL',
+    enterThemeUrl: '테마 URL 입력',
+    language: '언어',
+    
+    // Public identifier management
+    publicIdentifier: '공개 식별자',
+    enterPublicIdentifier: '공개 식별자 입력',
+    publicIdentifierAdded: '공개 식별자가 추가됨',
+    publicNameTaken: '공개 이름이 이미 사용 중입니다 - 다른 이름을 사용하세요',
+    
+    // Account creation wizard
+    createFriendsAccount: 'Friends 계정 생성',
+    finishAccountCreation: '계정 생성 완료',
+    chooseDisplayName: '표시 이름 선택',
+    setProfileImageOptional: '여기에 프로필 이미지를 설정할 수 있습니다 (선택사항)',
+    choosePublicIdentifierOptional: '검색 가능한 공개 식별자 선택 (선택사항)',
+    waitingProfileInitialization: '프로필 초기화가 진행되는 동안 기다려주세요',
+    creatingPublicIdentifier: '공개 식별자 생성 중...',
+    noAccountPackageFoundQuestion: '계정 패키지를 찾을 수 없습니다. 생성하시겠습니까?',
+    settingsUpdated: '설정이 성공적으로 업데이트됨',
+    
+    // Friends
+    addFriend: '친구 추가',
+    removeFriend: '친구 삭제',
+    friendPeerId: '친구 피어 ID',
+    enterPeerId: '피어 ID 입력',
+    friendName: '친구 이름',
+    enterFriendName: '이름 입력',
+    selectFriend: '친구 선택',
+    peerIdCopied: '친구 피어 ID가 복사되었습니다!',
+    friendAdded: '친구가 추가됨',
+    friendRemoved: '친구가 삭제됨',
+    
+    // Friend Requests
+    profileId: '프로필 ID',
+    enterProfileId: '친구의 프로필 ID 입력',
+    profileIdOrPublicIdentifier: '프로필 ID 또는 공개 식별자',
+    enterIdOrIdentifier: '프로필 ID 또는 공개 식별자 입력',
+    findFriend: '친구 찾기',
+    displayName: '표시 이름',
+    enterDisplayName: '이 연락처의 표시 이름 입력',
+    sendFriendRequest: '친구 요청 보내기',
+    acceptFriendRequest: '친구 요청 수락',
+    friendRequestSent: '친구 요청 전송됨',
+    friendRequestAccepted: '친구 요청 수락됨',
+    waitingForResponse: '응답 대기 중...',
+    newFriendRequests: '새 친구 요청',
+    sending: '전송 중...',
+    back: '뒤로',
+    cancel: '취소',
+    addNewFriend: '새 친구 추가',
+    loadProfile: '프로필 로드',
+    profilePreview: '프로필 미리보기',
+    profileNotFound: '프로필을 찾을 수 없음',
+    errorLoadingProfile: '프로필 로드 오류',
+    errorSendingRequest: '친구 요청 전송 오류',
+    errorAcceptingRequest: '친구 요청 수락 오류',
+    
+    // Chat
+    typeMessage: '메시지 입력...',
+    connectFirst: '메시지를 보내려면 먼저 연결하세요',
+    noMessages: '아직 메시지가 없습니다. 대화를 시작하세요!',
+    waitForFriendOnline: '메시지를 보낼 수 없음 - 친구가 온라인 상태가 될 때까지 대기 중',
+    
+    // Connection states
+    notConnected: '연결되지 않음',
+    connecting: '연결 중...',
+    initializing: '초기화 중...',
+    backendError: '백엔드 오류',
+    
+    // Notifications
+    notificationsEnabled: '푸시 알림 활성화됨',
+    notificationsDenied: '푸시 알림 거부됨',
+    notificationsNotAvailable: '푸시 알림을 사용할 수 없음',
+    requestAgain: '다시 요청',
+    pushNotifications: '푸시 알림',
+    
+    // Errors
+    connectionError: '연결 오류',
+    invalidPeerId: '잘못된 피어 ID',
+    friendExists: '친구가 이미 존재함',
+    
+    // Session management
+    sessionTransferred: '세션이 새 앱 인스턴스로 이전됨',
+    sessionDeactivatedMessage: '다른 인스턴스가 열렸기 때문에 이 앱 인스턴스가 비활성화되었습니다.',
+    reload: '새로고침',
+    close: '닫기',
+    
     welcome: 'P2P Chat에 오신 것을 환영합니다!',
     noFriendSelected: '왼쪽에서 친구를 선택하여 채팅을 시작하세요.'
   },
@@ -907,6 +1348,97 @@ export const translations: Translations = {
     theme: '主题',
     lightMode: '亮模式',
     darkMode: '暗模式',
+    
+    // Account settings
+    profileImage: '个人资料图片',
+    enterDatamapAddress: '输入数据映射地址',
+    themeUrl: '主题URL',
+    enterThemeUrl: '输入主题URL',
+    language: '语言',
+    
+    // Public identifier management
+    publicIdentifier: '公共标识符',
+    enterPublicIdentifier: '输入公共标识符',
+    publicIdentifierAdded: '公共标识符已添加',
+    publicNameTaken: '公共名称已被使用 - 请使用其他名称',
+    
+    // Account creation wizard
+    createFriendsAccount: '创建好友账户',
+    finishAccountCreation: '完成账户创建',
+    chooseDisplayName: '选择显示名称',
+    setProfileImageOptional: '您可以在此设置个人资料图片（可选）',
+    choosePublicIdentifierOptional: '选择可搜索的公共标识符（可选）',
+    waitingProfileInitialization: '请等待个人资料初始化',
+    creatingPublicIdentifier: '正在创建公共标识符...',
+    noAccountPackageFoundQuestion: '未找到账户包。是否创建一个？',
+    settingsUpdated: '设置已成功更新',
+    
+    // Friends
+    addFriend: '添加好友',
+    removeFriend: '删除好友',
+    friendPeerId: '好友Peer ID',
+    enterPeerId: '输入Peer ID',
+    friendName: '好友名称',
+    enterFriendName: '输入名称',
+    selectFriend: '选择好友',
+    peerIdCopied: '好友Peer ID已复制！',
+    friendAdded: '好友已添加',
+    friendRemoved: '好友已删除',
+    
+    // Friend Requests
+    profileId: '个人资料ID',
+    enterProfileId: '输入好友的个人资料ID',
+    profileIdOrPublicIdentifier: '个人资料ID或公共标识符',
+    enterIdOrIdentifier: '输入个人资料ID或公共标识符',
+    findFriend: '查找好友',
+    displayName: '显示名称',
+    enterDisplayName: '为此联系人输入显示名称',
+    sendFriendRequest: '发送好友请求',
+    acceptFriendRequest: '接受好友请求',
+    friendRequestSent: '好友请求已发送',
+    friendRequestAccepted: '好友请求已接受',
+    waitingForResponse: '等待回应...',
+    newFriendRequests: '新的好友请求',
+    sending: '发送中...',
+    back: '返回',
+    cancel: '取消',
+    addNewFriend: '添加新好友',
+    loadProfile: '加载个人资料',
+    profilePreview: '个人资料预览',
+    profileNotFound: '未找到个人资料',
+    errorLoadingProfile: '加载个人资料错误',
+    errorSendingRequest: '发送好友请求错误',
+    errorAcceptingRequest: '接受好友请求错误',
+    
+    // Chat
+    typeMessage: '输入消息...',
+    connectFirst: '请先连接以发送消息',
+    noMessages: '暂无消息。开始对话！',
+    waitForFriendOnline: '无法发送消息 - 等待好友上线',
+    
+    // Connection states
+    notConnected: '未连接',
+    connecting: '连接中...',
+    initializing: '初始化中...',
+    backendError: '后端错误',
+    
+    // Notifications
+    notificationsEnabled: '推送通知已启用',
+    notificationsDenied: '推送通知被拒绝',
+    notificationsNotAvailable: '推送通知不可用',
+    requestAgain: '再次请求',
+    pushNotifications: '推送通知',
+    
+    // Errors
+    connectionError: '连接错误',
+    invalidPeerId: '无效的Peer ID',
+    friendExists: '好友已存在',
+    
+    // Session management
+    sessionTransferred: '会话已转移到新的应用实例',
+    sessionDeactivatedMessage: '由于打开了另一个实例，此应用实例已被停用。',
+    reload: '重新加载',
+    close: '关闭',
     
     welcome: '欢迎使用P2P聊天！',
     noFriendSelected: '选择左侧的朋友开始聊天。'

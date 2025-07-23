@@ -2744,7 +2744,7 @@
         
         <div class="modal-buttons">
           <button class="primary-button" on:click={() => showSettingsModal = false}>
-            Schließen
+            {currentTranslations.close}
           </button>
         </div>
       </div>
