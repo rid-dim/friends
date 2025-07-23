@@ -7,6 +7,7 @@
   import type { Friend } from '../types';
   import { onMount } from 'svelte';
   import { tick } from 'svelte';
+  import AvatarModal from './AvatarModal.svelte';
 
   export let friend: Friend | undefined = undefined;
   export let messages: Array<{
@@ -193,14 +194,12 @@
         {/if}
       </div>
     </div>
-    {#if showAvatarModal}
-      <div class="avatar-modal-overlay" on:click|self={closeAvatarModal}>
-        <div class="avatar-modal-content">
-          <img src={avatarUrl} alt="Avatar" class="avatar-modal-img" />
-          <button class="avatar-modal-close" on:click={closeAvatarModal}>×</button>
-        </div>
-      </div>
-    {/if}
+    <AvatarModal 
+      imageUrl={avatarUrl || ''}
+      altText={friend?.displayName ?? 'Avatar'}
+      isOpen={showAvatarModal}
+      on:close={closeAvatarModal}
+    />
   {:else}
     <div class="welcome-screen">
       <h2>{welcomeTitle}</h2>
@@ -665,7 +664,7 @@
   .friend-avatar {
     width: 72px;
     height: 72px;
-    border-radius: 50%;
+    border-radius: 12px;
     object-fit: cover;
     margin-right: 1rem;
     transition: box-shadow 0.2s;
@@ -681,6 +680,7 @@
     justify-content: center;
     font-weight: 600;
     color: var(--text-color);
+    border-radius: 12px;
   }
   .header-main {
     flex: 1;
@@ -726,53 +726,4 @@
     font-size: 1.2rem;
   }
   .save-btn:hover { opacity:0.8; }
-  .avatar-modal-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-  }
-  .avatar-modal-content {
-    position: relative;
-    background: var(--background-color, #fff);
-    border-radius: 16px;
-    padding: 1.5rem;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-    max-width: 80vw;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  .avatar-modal-img {
-    max-width: 75vw;
-    max-height: 75vh;
-    border-radius: 16px;
-    object-fit: contain;
-    background: #fff;
-  }
-  .avatar-modal-close {
-    position: absolute;
-    top: -0.5rem;
-    right: -0.5rem;
-    background: var(--background-color, #fff);
-    border: 2px solid var(--line-color, #ddd);
-    border-radius: 50%;
-    width: 2.5rem;
-    height: 2.5rem;
-    font-size: 1.5rem;
-    color: var(--text-color, #222);
-    cursor: pointer;
-    transition: opacity 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  }
-  .avatar-modal-close:hover {
-    opacity: 1;
-  }
 </style> 

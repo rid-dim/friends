@@ -87,7 +87,7 @@
   
   // UI state
   let notification = '';
-  let connectionStatus = 'Initializing...';
+  let connectionStatus = '';
   let notificationStatus = '';
   let showSettingsModal = false;
   
@@ -119,6 +119,9 @@
   
   // Get translations for current language
   $: t = translations[language];
+  
+  // Update connectionStatus when language changes
+  $: connectionStatus = connectionStatus || t.initializing;
   
   // Initialize connection manager
   onMount(() => {
@@ -486,7 +489,7 @@
       }
     } catch (error) {
       console.error('❌ Error during backend initialization:', error);
-      connectionStatus = 'Backend error';
+      connectionStatus = t.backendError;
     } finally {
       isLoadingAccountPackage = false;
     }
@@ -1373,10 +1376,29 @@
     }
   }
   
-  // Request notification permission
+  // Anfrage nur, wenn der Browser noch nicht gefragt hat ("default")
   async function requestNotificationPermission() {
     if ('Notification' in window) {
       if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        updateNotificationStatus();
+        if (permission === 'granted') {
+          showNotification(t.notificationsEnabled);
+        } else if (permission === 'denied') {
+          showNotification(t.notificationsDenied);
+        }
+      } else {
+        updateNotificationStatus();
+      }
+    } else {
+      notificationStatus = t.notificationsNotSupported;
+    }
+  }
+  
+  // Erneut anfragen – wird über Einstellungsdialog aufgerufen
+  async function reRequestNotificationPermission() {
+    if ('Notification' in window) {
+      if (Notification.permission !== 'granted') {
         const permission = await Notification.requestPermission();
         updateNotificationStatus();
         if (permission === 'granted') {
@@ -2447,6 +2469,7 @@
       {handshakeCountdown}
       {notificationStatus}
       username={accountPackage?.username}
+      {language}
       on:openSettings={() => showSettingsModal = true}
     />
     <div class="header-buttons">
@@ -2467,6 +2490,10 @@
         myUsername={accountPackage?.username || 'User'}
         {handshakeCountdowns}
         {language}
+        profileImage={accountPackage?.profileImage || ''}
+        {backendUrl}
+        publicIdentifiers={publicIdentifiers}
+        debug={debugMode}
         on:selectFriend={handleSelectFriend}
         on:addFriend={handleShowFriendRequestModal}
         on:removeFriend={handleRemoveFriend}
@@ -2670,6 +2697,21 @@
               <button class="add-button" on:click={() => { showAddPublicIdentifier = true; }} title="+">+</button>
             {/if}
           </div>
+
+          <!-- Push-Notification Einstellungen -->
+          {#if browser && 'Notification' in window}
+            <div class="setting-group">
+              <label>{t.pushNotifications || 'Push-Notifications'}</label>
+              <div class="notification-permission-row">
+                <span class="notification-status-badge">{notificationStatus}</span>
+                {#if Notification.permission !== 'granted'}
+                  <button class="secondary-button" on:click={() => reRequestNotificationPermission()}>
+                    {t.requestAgain}
+                  </button>
+                {/if}
+              </div>
+            </div>
+          {/if}
         </div>
         
         <div class="modal-buttons">
@@ -3036,5 +3078,22 @@
 
   .confirm-button:hover {
     opacity: 0.85;
+  }
+
+  /* Layout für Push-Notification Einstellung */
+  .notification-permission-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+  }
+
+  /* Badge-Stil für Push-Notification-Status */
+  .notification-status-badge {
+    background: var(--foreground-color1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    white-space: nowrap;
   }
 </style> 

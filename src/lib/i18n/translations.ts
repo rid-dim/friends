@@ -72,6 +72,11 @@ export const translations = {
     connected: 'Connected',
     notConnected: 'Not Connected',
     connecting: 'Connecting...',
+    initializing: 'Initializing...',
+    backendError: 'Backend error',
+    noConnections: 'No connections',
+    oneConnected: '1 friend connected',
+    multipleConnected: '{count} friends connected',
     
     // Notifications
     peerIdCopied: 'Friend\'s Peer ID copied!',
@@ -84,6 +89,13 @@ export const translations = {
     notificationsNotRequested: 'Not requested',
     notificationsNotSupported: 'Not supported',
     notificationsNotAvailable: 'Push notifications not available',
+    requestAgain: 'Request again',
+    pushNotifications: 'Push Notifications',
+    
+    // Status bar
+    status: 'Status',
+    handshake: 'Handshake',
+    dwebApp: 'a dweb app',
     
     // Errors
     connectionError: 'Connection error',
@@ -170,6 +182,11 @@ export const translations = {
     connected: 'Verbunden',
     notConnected: 'Nicht verbunden',
     connecting: 'Verbinde...',
+    initializing: 'Initialisiere...',
+    backendError: 'Backend-Fehler',
+    noConnections: 'Keine Verbindungen',
+    oneConnected: '1 Freund verbunden',
+    multipleConnected: '{count} Freunde verbunden',
     
     // Notifications
     peerIdCopied: 'Peer ID des Freundes kopiert!',
@@ -182,6 +199,13 @@ export const translations = {
     notificationsNotRequested: 'Nicht angefragt',
     notificationsNotSupported: 'Nicht unterstützt',
     notificationsNotAvailable: 'Push-Notifications nicht verfügbar',
+    requestAgain: 'Erneut anfragen',
+    pushNotifications: 'Push-Benachrichtigungen',
+    
+    // Status bar
+    status: 'Status',
+    handshake: 'Handshake',
+    dwebApp: 'eine dweb App',
     
     // Errors
     connectionError: 'Verbindungsfehler',
@@ -250,6 +274,11 @@ export const translations = {
     connected: 'Connecté',
     notConnected: 'Non connecté',
     connecting: 'Connexion...',
+    initializing: 'Initialisation...',
+    backendError: 'Erreur de backend',
+    noConnections: 'Aucune connexion',
+    oneConnected: '1 ami connecté',
+    multipleConnected: '{count} amis connectés',
     
     // Notifications
     peerIdCopied: 'ID Peer de l\'ami copié !',
@@ -262,6 +291,13 @@ export const translations = {
     notificationsNotRequested: 'Non demandées',
     notificationsNotSupported: 'Non supportées',
     notificationsNotAvailable: 'Notifications push non disponibles',
+    requestAgain: 'Demander à nouveau',
+    pushNotifications: 'Notifications push',
+    
+    // Status bar
+    status: 'Statut',
+    handshake: 'Poignée de main',
+    dwebApp: 'une application dweb',
     
     // Errors
     connectionError: 'Erreur de connexion',
@@ -328,6 +364,11 @@ export const translations = {
     connected: 'Conectado',
     notConnected: 'No conectado',
     connecting: 'Conectando...',
+    initializing: 'Inicializando...',
+    backendError: 'Error de backend',
+    noConnections: 'Sin conexiones',
+    oneConnected: '1 amigo conectado',
+    multipleConnected: '{count} amigos conectados',
     
     // Notifications
     peerIdCopied: '¡ID Peer del amigo copiado!',
@@ -340,6 +381,13 @@ export const translations = {
     notificationsNotRequested: 'No solicitadas',
     notificationsNotSupported: 'No compatibles',
     notificationsNotAvailable: 'Notificaciones push no disponibles',
+    requestAgain: 'Solicitar de nuevo',
+    pushNotifications: 'Notificaciones push',
+    
+    // Status bar
+    status: 'Estado',
+    handshake: 'Conexión',
+    dwebApp: 'una aplicación dweb',
     
     // Errors
     connectionError: 'Error de conexión',
@@ -406,6 +454,11 @@ export const translations = {
     connected: 'Свързан',
     notConnected: 'Не е свързан',
     connecting: 'Свързване...',
+    initializing: 'Инициализиране...',
+    backendError: 'Грешка в бекенда',
+    noConnections: 'Няма връзки',
+    oneConnected: '1 свързан приятел',
+    multipleConnected: '{count} свързани приятели',
     
     // Notifications
     peerIdCopied: 'Peer ID на приятел е копирано!',
@@ -418,6 +471,13 @@ export const translations = {
     notificationsNotRequested: 'Не са поискани',
     notificationsNotSupported: 'Не се поддържат',
     notificationsNotAvailable: 'Push известията не са налични',
+    requestAgain: 'Поискайте отново',
+    pushNotifications: 'Push известия',
+    
+    // Status bar
+    status: 'Статус',
+    handshake: 'Свързване',
+    dwebApp: 'dweb приложение',
     
     // Errors
     connectionError: 'Грешка при свързване',
@@ -484,6 +544,11 @@ export const translations = {
     connected: '接続済み',
     notConnected: '未接続',
     connecting: '接続中...',
+    initializing: '初期化中...',
+    backendError: 'バックエンドエラー',
+    noConnections: '接続なし',
+    oneConnected: '1人の友達が接続中',
+    multipleConnected: '{count}人の友達が接続中',
     
     // Notifications
     peerIdCopied: '友達のPeer IDをコピーしました！',
@@ -496,6 +561,13 @@ export const translations = {
     notificationsNotRequested: '未要求',
     notificationsNotSupported: 'サポート外',
     notificationsNotAvailable: 'プッシュ通知は利用できません',
+    requestAgain: '再度リクエスト',
+    pushNotifications: 'プッシュ通知',
+    
+    // Status bar
+    status: 'ステータス',
+    handshake: 'ハンドシェイク',
+    dwebApp: 'dwebアプリ',
     
     // Errors
     connectionError: '接続エラー',
@@ -562,6 +634,11 @@ export const translations = {
     connected: '연결됨',
     notConnected: '연결되지 않음',
     connecting: '연결 중...',
+    initializing: '초기화 중...',
+    backendError: '백엔드 오류',
+    noConnections: '연결 없음',
+    oneConnected: '1명의 친구가 연결됨',
+    multipleConnected: '{count}명의 친구가 연결됨',
     
     // Notifications
     peerIdCopied: '친구의 Peer ID가 복사되었습니다!',
@@ -574,6 +651,13 @@ export const translations = {
     notificationsNotRequested: '요청되지 않음',
     notificationsNotSupported: '지원되지 않음',
     notificationsNotAvailable: '푸시 알림을 사용할 수 없습니다',
+    requestAgain: '다시 요청',
+    pushNotifications: '푸시 알림',
+    
+    // Status bar
+    status: '상태',
+    handshake: '연결 설정',
+    dwebApp: 'dweb 앱',
     
     // Errors
     connectionError: '연결 오류',
@@ -640,6 +724,11 @@ export const translations = {
     connected: '已连接',
     notConnected: '未连接',
     connecting: '连接中...',
+    initializing: '初始化中...',
+    backendError: '后端错误',
+    noConnections: '无连接',
+    oneConnected: '1位好友已连接',
+    multipleConnected: '{count}位好友已连接',
     
     // Notifications
     peerIdCopied: '已复制好友的Peer ID！',
@@ -652,6 +741,13 @@ export const translations = {
     notificationsNotRequested: '未请求',
     notificationsNotSupported: '不支持',
     notificationsNotAvailable: '推送通知不可用',
+    requestAgain: '重新请求',
+    pushNotifications: '推送通知',
+    
+    // Status bar
+    status: '状态',
+    handshake: '握手',
+    dwebApp: '一个dweb应用',
     
     // Errors
     connectionError: '连接错误',

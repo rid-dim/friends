@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { translations } from '../i18n/translations';
   import type { Friend } from '../types';
+  import AvatarModal from './AvatarModal.svelte';
   
   export let friends: Friend[] = [];
   export let selectedFriendId: string | null = null;
@@ -14,8 +15,20 @@
     isConnecting: boolean;
   }> = {};
   export let language: 'en' | 'de' = 'en';
+  export let profileImage: string = '';
+  export let backendUrl: string = '';
+  export let publicIdentifiers: string[] = [];
+  export let debug: boolean = false;
   
   const dispatch = createEventDispatcher();
+  
+  let showAvatarModal = false;
+  
+  // Build full URL for profile image
+  $: profileImageUrl = profileImage ? 
+    (profileImage.startsWith('http') ? profileImage : 
+     backendUrl ? `${backendUrl}/dweb-0/data/${profileImage}` : `/dweb-0/data/${profileImage}`) : 
+    '';
   
   function handleAddFriend() {
     // Just dispatch the event to open the modal
@@ -39,16 +52,60 @@
     navigator.clipboard.writeText(profileId);
     dispatch('notification', translations[language].peerIdCopied);
   }
+
+  /**
+   * Kopiert den öffentlichen Identifier in die Zwischenablage
+   */
+  function copyPublicIdentifier(id: string) {
+    if (!id) return;
+    navigator.clipboard.writeText(id);
+    dispatch('notification', translations[language].peerIdCopied);
+  }
+  
+  function openAvatarModal() {
+    if (profileImageUrl) showAvatarModal = true;
+  }
+  
+  function closeAvatarModal() {
+    showAvatarModal = false;
+  }
   
   $: t = translations[language];
 </script>
 
 <div class="friends-list">
-  <!-- Nutzername wird jetzt im Header angezeigt
-  <div class="my-info">
-    <div class="my-name">{myUsername}</div>
+  <!-- Profilbild-Bereich oberhalb der Freundesliste -->
+  <div class="profile-section">
+    {#if profileImageUrl}
+      <div class="profile-image-container">
+        <img src={profileImageUrl} alt="Profile" class="profile-image" on:click={openAvatarModal} style="cursor: pointer;" />
+      </div>
+    {:else}
+      <div class="profile-image-container">
+        <div class="profile-image placeholder">
+          {myUsername.charAt(0).toUpperCase()}
+        </div>
+      </div>
+    {/if}
+    <div class="profile-info">
+      <div class="profile-name">{myUsername}</div>
+      {#if (!publicIdentifiers?.length || debug)}
+        <div class="profile-id" on:click={copyMyPeerId} title={t.peerIdCopied}>
+          {profileId.slice(0, 8)}...
+        </div>
+      {/if}
+
+      {#if publicIdentifiers?.length}
+        <div class="public-identifiers-container">
+          {#each publicIdentifiers as id}
+            <div class="public-identifier" on:click={() => copyPublicIdentifier(id)} title={t.peerIdCopied}>
+              {id}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
   </div>
-  -->
   
   <div class="friends">
     {#each friends as friend (friend.targetProfileId || friend.displayName)}
@@ -108,6 +165,13 @@
       + {t.addFriend}
     </button>
   </div>
+  
+  <AvatarModal 
+    imageUrl={profileImageUrl}
+    altText="Mein Profilbild"
+    isOpen={showAvatarModal}
+    on:close={closeAvatarModal}
+  />
 </div>
 
 <style>
@@ -119,17 +183,74 @@
     border-right: 1px solid var(--line-color);
   }
   
-  .my-info {
+  .profile-section {
     padding: 1rem;
     border-bottom: 1px solid var(--line-color);
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 1rem;
+    align-items: center;
+    background: var(--foreground-color1);
   }
   
-  .my-name {
+  .profile-image-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .profile-image {
+    width: 200px;
+    height: 200px;
+    border-radius: 20px;
+    object-fit: cover;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: transform 0.2s ease;
+  }
+  
+  .profile-image:hover {
+    transform: scale(1.02);
+  }
+  
+  .profile-image.placeholder {
+    background: var(--foreground-color2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4rem;
+    font-weight: 600;
+    color: var(--text-color);
+    border-radius: 20px;
+  }
+  
+  .profile-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  
+  .profile-name {
     font-weight: 600;
     font-size: 1.1rem;
+    text-align: center;
+  }
+  
+  .profile-id {
+    font-family: monospace;
+    background: var(--background-color);
+    border: 1px solid var(--line-color);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    width: fit-content;
+  }
+  
+  .profile-id:hover {
+    background: var(--foreground-color2);
   }
   
   .peer-id {
@@ -326,5 +447,31 @@
   
   .add-friend-button:hover {
     opacity: 0.8;
+  }
+
+  /* Stil für den öffentlich suchbaren Identifier */
+  .public-identifier {
+    font-family: monospace;
+    background: var(--background-color);
+    border: 1px solid var(--line-color);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    width: fit-content;
+  }
+
+  .public-identifier:hover {
+    background: var(--foreground-color2);
+  }
+
+  /* Behälter für mehrere Public Identifier */
+  .public-identifiers-container {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
   }
 </style> 

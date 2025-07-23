@@ -357,7 +357,7 @@
   .profile-image-placeholder {
     width: 60px;
     height: 60px;
-    border-radius: 50%;
+    border-radius: 12px;
     object-fit: cover;
   }
   
@@ -369,6 +369,7 @@
     font-size: 1.5rem;
     font-weight: bold;
     color: var(--text-color);
+    border-radius: 12px;
   }
   
   .profile-details {
