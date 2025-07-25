@@ -40,15 +40,20 @@ export class SinglePeerConnection {
   private backendUrl: string;
   private myProfileId: string;
   private friendProfileId: string;
+  // RSA-Schlüssel (optional)
+  private myPrivateKeyPem?: string;
+  private friendPublicKeyPem?: string;
 
   constructor(peerId: string, events: ConnectionEvents,
-    myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', myProfileId: string = '', friendProfileId: string = '') {
+    myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', myProfileId: string = '', friendProfileId: string = '', myPrivateKeyPem?: string, friendPublicKeyPem?: string) {
     this.peerId = peerId;
     this.events = events;
     this.backendUrl = backendUrl;
     this.myProfileId = myProfileId;
     // Verwende den übergebenen friendName oder fallback auf peerId
     this.friendProfileId = friendProfileId || peerId;
+    this.myPrivateKeyPem = myPrivateKeyPem;
+    this.friendPublicKeyPem = friendPublicKeyPem;
     
     console.log(`[${this.peerId}] Creating smokesigns Link with DwebConnector:`, { 
       readAddress: peerAddress,
@@ -88,6 +93,10 @@ export class SinglePeerConnection {
       this.link = new Link({
         readWriteInterface: connector,
         priority: priority,
+        // @ts-ignore --- smokesigns akzeptiert diese Felder, Typdeklaration evtl. veraltet
+        privateKey: this.myPrivateKeyPem,
+        // @ts-ignore
+        publicKey: this.friendPublicKeyPem,
         onConnect: () => {
           console.log(`[${this.peerId}] Link connected`);
           this.isConnected = true;
@@ -760,7 +769,7 @@ export class ConnectionManager {
   /**
    * Create a new connection using the smokesigns library
    */
-  createConnectionUsingSigns(peerId: string, myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', myProfileId: string = '', friendProfileId: string = ''): SinglePeerConnection {
+  createConnectionUsingSigns(peerId: string, myAddress: string, peerAddress: string, priority: boolean, backendUrl: string = '', myProfileId: string = '', friendProfileId: string = '', myPrivateKeyPem?: string, friendPublicKeyPem?: string): SinglePeerConnection {
     // Close existing connection if any
     this.closeConnection(peerId);
     
@@ -772,7 +781,9 @@ export class ConnectionManager {
       priority,
       backendUrl,
       myProfileId,
-      friendProfileId
+      friendProfileId,
+      myPrivateKeyPem,
+      friendPublicKeyPem
     );
     this.connections.set(peerId, conn);
     return conn;

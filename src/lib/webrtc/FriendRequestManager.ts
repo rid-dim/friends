@@ -1,6 +1,8 @@
 export interface ProfileData {
   accountname: string;
   profileImage?: string;
+  /** Öffentlicher RSA-Schlüssel (PEM) des Benutzers */
+  publicKeyPem?: string;
   'friend-request-scratchpad': {
     'ant-owner-secret': string;
     object_name: string;
@@ -15,6 +17,13 @@ export interface FriendRequest {
   displayName?: string; // Optional: Display-Name für einfachere Verwaltung
 }
 
+// --- Hybrid-Encryption Container (wie in smokesigns) ---
+interface EncryptedData {
+  encryptedKey: string;      // RSA-verschlüsselter AES-Key (base64)
+  encryptedData: string;     // AES-verschlüsseltes Payload (base64)
+  iv: string;                // Initialisierungsvektor (base64)
+}
+
 export class FriendRequestManager {
   private backendUrl: string;
   private profileId: string;
@@ -23,13 +32,87 @@ export class FriendRequestManager {
   private profileObjectName: string;
   private antOwnerSecret = '6e273a3c19d3e908e905dc6537b7cfb9010ca7650a605886029850cef60cd440';
 
-  constructor(backendUrl: string, profileId: string, accountName: string) {
+  // Eigener RSA-Private-Key (PEM) für Entschlüsselung
+  private privateKeyPem?: string;
+
+  constructor(backendUrl: string, profileId: string, accountName: string, privateKeyPem?: string) {
     this.backendUrl = backendUrl;
     this.profileId = profileId;
     this.accountName = accountName;
+    this.privateKeyPem = privateKeyPem;
 
     // Bestimme object_name für das Profil-Scratchpad
     this.profileObjectName = accountName ? `profile${accountName}` : 'profile';
+  }
+
+  // Ermöglicht nachträgliches Setzen/Ändern des Private Keys
+  public setPrivateKeyPem(pem: string) {
+    this.privateKeyPem = pem;
+  }
+
+  // ----------------------------------------------
+  // Hybrid-Crypto Helfer (RSA-OAEP + AES-CBC)
+  // ----------------------------------------------
+
+  private pemToBuffer(pem: string): ArrayBuffer {
+    const pemContents = pem.replace(/-----BEGIN [^-]+-----/, '').replace(/-----END [^-]+-----/, '').replace(/\s/g, '');
+    return this.base64ToBuffer(pemContents);
+  }
+
+  private base64ToBuffer(base64: string): ArrayBuffer {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  private bufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return btoa(binary);
+  }
+
+  private async encryptHybrid(data: any, publicPem: string): Promise<EncryptedData> {
+    const aesKeyRaw = crypto.getRandomValues(new Uint8Array(32));
+    const iv = crypto.getRandomValues(new Uint8Array(16));
+
+    const aesKey = await crypto.subtle.importKey('raw', aesKeyRaw, { name: 'AES-CBC' }, false, ['encrypt']);
+    const encoded = new TextEncoder().encode(JSON.stringify(data));
+    const encryptedDataBuf = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, aesKey, encoded);
+
+    const pubKeyBuf = this.pemToBuffer(publicPem);
+    const rsaKey = await crypto.subtle.importKey('spki', pubKeyBuf, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+    const encryptedKeyBuf = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, rsaKey, aesKeyRaw);
+
+    return {
+      encryptedKey: this.bufferToBase64(encryptedKeyBuf),
+      encryptedData: this.bufferToBase64(encryptedDataBuf),
+      iv: this.bufferToBase64(iv.buffer)
+    };
+  }
+
+  private async decryptHybrid(container: EncryptedData, privatePem: string): Promise<any> {
+    try {
+      const privKeyBuf = this.pemToBuffer(privatePem);
+      const rsaKey = await crypto.subtle.importKey('pkcs8', privKeyBuf, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['decrypt']);
+
+      const encKeyBuf = this.base64ToBuffer(container.encryptedKey);
+      const aesKeyRaw = await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, rsaKey, encKeyBuf);
+
+      const aesKey = await crypto.subtle.importKey('raw', aesKeyRaw, { name: 'AES-CBC' }, false, ['decrypt']);
+      const encDataBuf = this.base64ToBuffer(container.encryptedData);
+      const ivBuf = this.base64ToBuffer(container.iv);
+      const decryptedBuf = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: ivBuf }, aesKey, encDataBuf);
+
+      const json = new TextDecoder().decode(decryptedBuf);
+      return JSON.parse(json);
+    } catch (e) {
+      console.error('Hybrid-Decrypt failed', e);
+      return null;
+    }
   }
 
   // Generate SHA256 hash
@@ -249,6 +332,7 @@ export class FriendRequestManager {
 
       const scratchpadData = await response.json();
 
+      // Handle scratchpad wrapper format
       let chunk: any = null;
       if (Array.isArray(scratchpadData) && scratchpadData.length > 0) {
         chunk = scratchpadData[0];
@@ -258,10 +342,20 @@ export class FriendRequestManager {
 
       if (chunk && Array.isArray(chunk.unencrypted_data)) {
         try {
-          const requests = this.byteArrayToJson(chunk.unencrypted_data);
-          return Array.isArray(requests) ? requests : [];
+          const arr = this.byteArrayToJson(chunk.unencrypted_data);
+          // Entschlüsseln sofern nötig
+          const processed: FriendRequest[] = [];
+          for (const item of arr) {
+            if (item && item.encryptedKey && item.encryptedData && item.iv && this.privateKeyPem) {
+              const decrypted = await this.decryptHybrid(item as EncryptedData, this.privateKeyPem);
+              if (decrypted) processed.push(decrypted as FriendRequest);
+            } else {
+              processed.push(item as FriendRequest);
+            }
+          }
+          return processed;
         } catch (err) {
-          console.error('Error parsing friend requests JSON:', err);
+          console.error('Error parsing/decoding friend requests:', err);
           return [];
         }
       }
@@ -278,7 +372,7 @@ export class FriendRequestManager {
   }
 
   // Write friend request to scratchpad
-  async writeFriendRequest(objectName: string, secret: string, request: FriendRequest): Promise<boolean> {
+  async writeFriendRequest(objectName: string, secret: string, request: FriendRequest, recipientPublicKeyPem?: string): Promise<boolean> {
     try {
       // Aktuelle Requests lesen (falls vorhanden)
       const existingRequests = await this.readFriendRequests(objectName, secret);
@@ -320,6 +414,20 @@ export class FriendRequestManager {
         // Fallback: just add
         updatedRequests.push(request);
       }
+
+      // Optional verschlüsseln (erst nach dem Mergen, daher hier)
+      let payloadObj: any = request;
+      if (recipientPublicKeyPem) {
+        try {
+          payloadObj = await this.encryptHybrid(request, recipientPublicKeyPem);
+        } catch (e) {
+          console.warn('⚠️ Encryption of friend request failed, falling back to plaintext', e);
+        }
+      }
+
+      // Ersetze (gleicher Typ) vorhandenen Eintrag dieser profileId, ansonsten anhängen
+      updatedRequests = updatedRequests.filter(r => r.profileId !== request.profileId || (!!r.request !== !!request.request) || (!!r.approval !== !!request.approval));
+      updatedRequests.push(payloadObj);
 
       const requestsJson = JSON.stringify(updatedRequests);
       const requestsBytes = this.jsonToByteArray(requestsJson);
@@ -412,7 +520,7 @@ export class FriendRequestManager {
         return false;
       }
 
-      // Create friend request with handshake address
+      // Build request object
       const request: FriendRequest = {
         request: myHandshakeAddress, // Handshake-Adresse für WebRTC
         time: Date.now(),
@@ -420,10 +528,8 @@ export class FriendRequestManager {
         displayName: displayName
       };
 
-      // Write to target's friend request scratchpad
-      const objectName = targetProfile['friend-request-scratchpad'].object_name;
-      const secret = targetProfile['friend-request-scratchpad']['ant-owner-secret'];
-      return await this.writeFriendRequest(objectName, secret, request);
+      // Write friend request (optional Verschlüsselung)
+      return await this.writeFriendRequest(targetProfile['friend-request-scratchpad'].object_name, targetProfile['friend-request-scratchpad']['ant-owner-secret'], request, targetProfile.publicKeyPem);
     } catch (error) {
       console.error('Error sending friend request:', error);
       return false;
@@ -440,17 +546,15 @@ export class FriendRequestManager {
         return false;
       }
 
-      // Create approval with handshake address
+      // Build approval object
       const approval: FriendRequest = {
         approval: myHandshakeAddress, // Handshake-Adresse für WebRTC
         time: Date.now(),
         profileId: this.profileId // Eigene Profile-ID für Profil-Lookup
       };
 
-      // Write to requester's friend request scratchpad
-      const objectName = requesterProfile['friend-request-scratchpad'].object_name;
-      const secret = requesterProfile['friend-request-scratchpad']['ant-owner-secret'];
-      return await this.writeFriendRequest(objectName, secret, approval);
+      // Write approval to scratchpad (optional verschlüsselt)
+      return await this.writeFriendRequest(requesterProfile['friend-request-scratchpad'].object_name, requesterProfile['friend-request-scratchpad']['ant-owner-secret'], approval, requesterProfile.publicKeyPem);
     } catch (error) {
       console.error('Error accepting friend request:', error);
       return false;

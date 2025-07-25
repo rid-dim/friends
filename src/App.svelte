@@ -45,6 +45,8 @@
       timestamp: number; // Unix timestamp in milliseconds
     };
     publicIdentifiers?: string[];
+    /** RSA PKCS8 Private Key (PEM) */
+    privateKeyPem?: string;
   }
   
   // Application state
@@ -507,7 +509,7 @@
     if (isSessionActive) {
       // initializePeerCommunication entfernt – comm-Scratchpad wird nicht mehr verwendet
       if (accountPackage) {
-        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountPackage.username);
+        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountPackage.username, accountPackage.privateKeyPem);
         const ok = await friendRequestManager.initializeProfile();
         if (ok) {
           profileId = friendRequestManager.getProfileId();
@@ -515,6 +517,8 @@
         if (accountPackage.profileImage) {
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
         }
+        // Stelle sicher, dass ein RSA-Schlüsselpaar existiert und PublicKey im Profil gespeichert ist
+        await ensureKeyPair();
         await ensureFriendRequestLink();
         startFriendRequestCheck();
       }
@@ -778,7 +782,7 @@
       
       // Initialize Friend Request Manager (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
-        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountData.username);
+        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountData.username, accountData.privateKeyPem);
         const ok = await friendRequestManager.initializeProfile();
 
         if (ok) {
@@ -790,6 +794,8 @@
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
         }
 
+        // Stelle sicher, dass ein RSA-Schlüsselpaar existiert und PublicKey im Profil gespeichert ist
+        await ensureKeyPair();
         await ensureFriendRequestLink();
         startFriendRequestCheck();
       }
@@ -1019,7 +1025,7 @@
     if (!friendRequestManager) return;
     if (!friendObj.targetProfileId) return;
     try {
-      const prof = await friendRequestManager.readProfile(friendObj.targetProfileId);
+      const prof = await friendRequestManager.readProfile(friendObj.targetProfileId!);
       if (prof && prof.profileImage) {
         console.log('Loaded profile data:', prof);
         const idx = friends.findIndex(f => f === friendObj);
@@ -1647,10 +1653,22 @@
         return;
       }
       
+      // PublicKey des Freundes auslesen (falls vorhanden)
+      let friendPublicKeyPem: string | undefined;
+      if (friendRequestManager && friend?.targetProfileId) {
+        try {
+          const friendProfile = await friendRequestManager.readProfile(friend.targetProfileId!);
+          friendPublicKeyPem = friendProfile?.publicKeyPem;
+        } catch (e) {
+          console.warn('⚠️ Konnte PublicKey des Freundes nicht lesen', e);
+        }
+      }
+      
       console.log(`[${peerId}] Using smokesigns for connection with priority: ${isHighPriority ? 'true (initiator)' : 'false (responder)'}`);
       console.log(`[${peerId}] Using addresses: read=${peerId}, write=${myAddress}`);
       
       // Create new connection using smokesigns integration with DwebConnector
+      // @ts-ignore  – optionale RSA-Schlüssel können undefined sein
       connectionManager.createConnectionUsingSigns(
         peerId,
         myAddress, // my write address
@@ -1658,7 +1676,9 @@
         isHighPriority,
         backendUrl,
         profileId, // my profileId
-        friend.targetProfileId || '' // their profileId
+        friend.targetProfileId || '', // their profileId
+        accountPackage?.privateKeyPem,
+        friendPublicKeyPem
       );
       
       // Für Debugging-Zwecke: Füge einen Timeout hinzu, der nach 35 Sekunden prüft, ob die Verbindung erfolgreich war
@@ -1808,7 +1828,7 @@
     if (!friendRequestManager || !request.profileId) return;
     
     try {
-      const profileData = await friendRequestManager.readProfile(request.profileId);
+      const profileData = await friendRequestManager.readProfile(request.profileId!);
       selectedProfileData = profileData;
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -2037,7 +2057,7 @@
 
             // Versuche Profil zu laden, um accountname zu bekommen
             if (friendRequestManager) {
-              const profile = await friendRequestManager.readProfile(approval.profileId);
+              const profile = await friendRequestManager.readProfile(approval.profileId!);
               if (profile && profile.accountname) {
                 displayName = profile.accountname;
               }
@@ -2302,7 +2322,7 @@
 
       // FriendRequestManager initialisieren (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
-        friendRequestManager = new FriendRequestManager(backendUrl, '', displayNameToUse);
+        friendRequestManager = new FriendRequestManager(backendUrl, '', displayNameToUse, accountPackage.privateKeyPem);
         const ok = await friendRequestManager.initializeProfile();
 
         if (ok) {
@@ -2311,7 +2331,7 @@
 
         // Sicherstellen, dass der Display-Name im Profil korrekt gesetzt ist
         if (profileId) {
-          const profile = await friendRequestManager.readProfile(profileId);
+          const profile = await friendRequestManager.readProfile(profileId!);
           if (profile) {
             profile.accountname = displayNameToUse;
             delete (profile as any).accountName; // Altes Feld entfernen
@@ -2325,6 +2345,8 @@
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
         }
 
+        // Stelle sicher, dass ein RSA-Schlüsselpaar existiert und PublicKey im Profil gespeichert ist
+        await ensureKeyPair();
         await ensureFriendRequestLink();
         startFriendRequestCheck();
       }
@@ -2342,7 +2364,7 @@
       accountPackage = { ...accountPackage, username: name };
       const success = await updateAccountPackage({ ...accountPackage, username: name });
       if (success && friendRequestManager && profileId) {
-        const profile = await friendRequestManager.readProfile(profileId);
+        const profile = await friendRequestManager.readProfile(profileId!);
         if (profile) {
           profile.accountname = name;
           delete (profile as any).accountName;
@@ -2378,7 +2400,7 @@
       friendRequestManager.initializeProfile().then(async () => {
         // Sicherstellen, dass der Display-Name im Profil korrekt gesetzt ist
         if (accountPackage && profileId) {
-          const profile = await friendRequestManager?.readProfile(profileId);
+          const profile = await friendRequestManager?.readProfile(profileId!);
           if (profile && profile.accountname !== accountPackage.username) {
             console.log('🔄 Aktualisiere Display-Name im Profil:', accountPackage.username);
             profile.accountname = accountPackage.username;
@@ -2409,7 +2431,7 @@
     if (!accountPackage || !name || name === accountPackage.username) return;
     const success = await updateAccountPackage({ ...accountPackage, username: name });
     if (success && friendRequestManager && profileId) {
-      const profile = await friendRequestManager.readProfile(profileId);
+      const profile = await friendRequestManager.readProfile(profileId!);
       if (profile) {
         profile.accountname = name;
         delete (profile as any).accountName;
@@ -2442,7 +2464,7 @@
       // Backend-Update asynchron starten (kein await in reactive block)
       updateAccountPackage({ ...accountPackage, username: pendingDisplayName });
       if (friendRequestManager && profileId) {
-        friendRequestManager?.readProfile(profileId).then(p => {
+        friendRequestManager?.readProfile(profileId!).then(p => {
           if (p) {
             p.accountname = pendingDisplayName!;
             delete (p as any).accountName;
@@ -2454,6 +2476,73 @@
   }
 
   // Connection status is now updated reactively above
+
+  // Stelle sicher, dass ein RSA-Schlüsselpaar existiert und PublicKey im Profil gespeichert ist
+  async function ensureKeyPair() {
+    if (!accountPackage || !friendRequestManager || !profileId) return;
+
+    // Hilfsfunktionen
+    function bufferToPem(buffer: ArrayBuffer, label: string): string {
+      const binary = String.fromCharCode(...new Uint8Array(buffer));
+      const base64 = btoa(binary);
+      const lines = base64.match(/.{1,64}/g) || [];
+      return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----`;
+    }
+
+    let shouldGenerate = false;
+    if (!accountPackage.privateKeyPem) {
+      shouldGenerate = true;
+    } else {
+      // Prüfen, ob im Profil bereits ein PublicKey liegt
+      try {
+        const prof = await friendRequestManager.readProfile(profileId!);
+        if (!prof || !prof.publicKeyPem) {
+          shouldGenerate = true;
+        }
+      } catch (_) {
+        shouldGenerate = true;
+      }
+    }
+
+    if (!shouldGenerate) return; // alles vorhanden
+
+    console.log('🔑 Generiere neues RSA-Schlüsselpaar');
+    const keyPair = await crypto.subtle.generateKey(
+      {
+        name: 'RSA-OAEP',
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: 'SHA-256'
+      },
+      true,
+      ['encrypt', 'decrypt']
+    );
+
+    const privBuf = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
+    const pubBuf  = await crypto.subtle.exportKey('spki',  keyPair.publicKey);
+    const privPem = bufferToPem(privBuf, 'PRIVATE KEY');
+    const pubPem  = bufferToPem(pubBuf,  'PUBLIC KEY');
+
+    // Account-Package aktualisieren
+    const okPackage = await updateAccountPackage({ privateKeyPem: privPem });
+    if (okPackage) {
+      accountPackage = { ...accountPackage, privateKeyPem: privPem };
+      console.log('✅ PrivateKey im Account-Package gespeichert');
+      friendRequestManager?.setPrivateKeyPem?.(privPem);
+    }
+
+    // Profil aktualisieren
+    try {
+      const prof = await friendRequestManager.readProfile(profileId!);
+      if (prof) {
+        prof.publicKeyPem = pubPem;
+        await friendRequestManager.writeProfile(prof);
+        console.log('✅ PublicKey im Profil-Scratchpad gespeichert');
+      }
+    } catch (e) {
+      console.warn('⚠️ Konnte PublicKey nicht im Profil speichern', e);
+    }
+  }
 </script>
 
 <div class="app">
