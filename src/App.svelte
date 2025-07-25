@@ -12,6 +12,7 @@
   import FriendRequestNotification from './lib/components/FriendRequestNotification.svelte';
   import ProfileModal from './lib/components/ProfileModal.svelte';
   import AccountCreationWizard from './lib/components/AccountCreationWizard.svelte';
+  import SettingsModal from './lib/components/SettingsModal.svelte';
   
   // Import WebRTC and file handling
   import { ConnectionManager } from './lib/webrtc/ConnectionManager';
@@ -2571,184 +2572,23 @@
   
   <!-- Settings Modal -->
   {#if showSettingsModal && accountPackage}
-    <div 
-      class="modal-overlay" 
-      on:click|self={() => showSettingsModal = false}
-      on:keydown={(e) => e.key === 'Escape' && (showSettingsModal = false)}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-title"
-    >
-      <div class="modal-content">
-        <h2 id="settings-title">{currentTranslations.accountSettings}</h2>
-        <button class="close-button" on:click={() => showSettingsModal = false}>×</button>
-        
-        <div class="settings-container">
-          <!-- Display Name -->
-          <div class="setting-group">
-            <label for="display-name">{currentTranslations.displayName}</label>
-            <input
-              id="display-name"
-              type="text"
-              placeholder={currentTranslations.chooseDisplayName}
-              bind:value={displayNameDraft}
-              on:input={(e) => {
-                const input = e.target as HTMLInputElement;
-                scheduleDisplayNameSave(input.value);
-              }}
-            />
-          </div>
-
-          <div class="setting-group">
-            <label for="profile-image">{currentTranslations.profileImage}</label>
-            <input
-              id="profile-image"
-              type="text"
-              placeholder={currentTranslations.enterDatamapAddress}
-              value={accountPackage.profileImage || ''}
-              on:input={async (e) => {
-                if (accountPackage) {
-                  const input = e.target as HTMLInputElement;
-                  const success = await updateAccountPackage({
-                    ...accountPackage,
-                    profileImage: input.value
-                  });
-                  if (success) {
-                    // Profil-Scratchpad aktualisieren
-                    if (friendRequestManager) {
-                      await friendRequestManager.updateProfileImage(input.value);
-                    }
-                    showNotification(currentTranslations.settingsUpdated);
-                  }
-                }
-              }}
-            />
-            {#if accountPackage.profileImage}
-              <div class="preview">
-                <img 
-                  src={accountPackage.profileImage.startsWith('http') 
-                    ? accountPackage.profileImage 
-                    : backendUrl 
-                      ? `${backendUrl}/dweb-0/data/${accountPackage.profileImage}` 
-                      : `/dweb-0/data/${accountPackage.profileImage}`} 
-                  alt="Profile" 
-                />
-              </div>
-            {/if}
-          </div>
-          
-          <div class="setting-group">
-            <label for="theme-url">{currentTranslations.themeUrl}</label>
-            <input
-              id="theme-url"
-              type="text"
-              placeholder={currentTranslations.enterThemeUrl}
-              value={accountPackage.themeUrl || ''}
-              on:input={async (e) => {
-                if (accountPackage) {
-                  const input = e.target as HTMLInputElement;
-                  const success = await updateAccountPackage({
-                    ...accountPackage,
-                    themeUrl: input.value
-                  });
-                  if (success) {
-                    showNotification(currentTranslations.settingsUpdated);
-                    loadTheme(input.value);
-                  }
-                }
-              }}
-            />
-          </div>
-          
-          <div class="setting-group">
-            <label for="language">{currentTranslations.language}</label>
-            <select
-              id="language"
-              value={language}
-              on:change={(e) => {
-                const select = e.target as HTMLSelectElement;
-                const newLang = select.value as Language;
-                
-                // Wichtig: Zentralen Store zuerst aktualisieren
-                changeLanguage(newLang);
-                // Dann lokale Variable aktualisieren
-                language = newLang;
-                
-                if (accountPackage) {
-                  updateAccountPackage({
-                    ...accountPackage,
-                    language: newLang
-                  }).then(success => {
-                    if (success) {
-                      showNotification(translations[newLang]?.settingsUpdated || 'Settings updated');
-                    }
-                  });
-                }
-              }}
-            >
-              <option value="en">English</option>
-              <option value="de">Deutsch</option>
-              <option value="fr">Français</option>
-              <option value="es">Español</option>
-              <option value="bg">Български</option>
-              <option value="ja">日本語</option>
-              <option value="ko">한국어</option>
-              <option value="zh">中文</option>
-            </select>
-          </div>
-
-          <!-- NEW: Public Identifier management -->
-          <div class="setting-group">
-            <label>{currentTranslations.publicIdentifier}</label>
-
-            {#if publicIdentifiers.length > 0}
-              <ul class="public-identifiers">
-                {#each publicIdentifiers as id}
-                  <li>{id}</li>
-                {/each}
-              </ul>
-            {/if}
-
-            {#if showAddPublicIdentifier}
-              <div class="public-id-input">
-                <input
-                  type="text"
-                  placeholder={currentTranslations.enterPublicIdentifier}
-                  bind:value={newPublicIdentifier}
-                  on:keydown={(e) => e.key === 'Enter' && createPublicIdentifier(newPublicIdentifier)}
-                />
-                <button class="confirm-button" on:click={() => createPublicIdentifier(newPublicIdentifier)} title="Add">✓</button>
-              </div>
-            {/if}
-
-            {#if !showAddPublicIdentifier}
-              <button class="add-button" on:click={() => { showAddPublicIdentifier = true; }} title="+">+</button>
-            {/if}
-          </div>
-
-          <!-- Push-Notification Einstellungen -->
-          {#if browser && 'Notification' in window}
-            <div class="setting-group">
-              <label>{currentTranslations.pushNotifications || 'Push-Notifications'}</label>
-              <div class="notification-permission-row">
-                <span class="notification-status-badge">{notificationStatus}</span>
-                {#if Notification.permission !== 'granted'}
-                  <button class="secondary-button" on:click={() => reRequestNotificationPermission()}>
-                    {currentTranslations.requestAgain}
-                  </button>
-                {/if}
-              </div>
-            </div>
-          {/if}
-        </div>
-        
-        <div class="modal-buttons">
-          <button class="primary-button" on:click={() => showSettingsModal = false}>
-            {currentTranslations.close}
-          </button>
-        </div>
-      </div>
-    </div>
+    <SettingsModal
+      {accountPackage}
+      {language}
+      {backendUrl}
+      {notificationStatus}
+      {publicIdentifiers}
+      {publicIdentifierLoading}
+      {friendRequestManager}
+      {changeLanguage}
+      {updateAccountPackage}
+      {loadTheme}
+      {scheduleDisplayNameSave}
+      {reRequestNotificationPermission}
+      {createPublicIdentifier}
+      {showNotification}
+      on:close={() => showSettingsModal = false}
+    />
   {/if}
   
   <!-- Friend Request Modal -->

@@ -8,6 +8,7 @@ The Friends Chat Application enables direct peer-to-peer communication between u
 The Handshake to exchange Peer Info doesn't rely on a classic Server but utilizes the [Autonomi Network](https://www.autonomi.com) as handshake server (to be more precise Scratchpads on the autonomi network) for this.
 
 To sign up, create an account and start chatting with a friend you can see the flow in this little demo:
+(shows just inline and playable on [the main repo on codeberg](https://codeberg.org/riddim/friends) - github users who don't want to leave the platform need to follow the link and click on "view raw")
 
 ![Friends Account Setup Demo](docs/friends_account_setup.mp4)
 
