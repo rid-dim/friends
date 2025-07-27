@@ -147,7 +147,7 @@ sequenceDiagram
     ACS->>A: Decrypt with Alice's RSA private key
 
     Note over A,B: Direct P2P Connection
-    A<->B: Encrypted WebRTC communication (DTLS/SRTP)
+    A<->B: Encrypted WebRTC communication - DTLS/SRTP
 ```
 
 
