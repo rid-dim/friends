@@ -145,9 +145,10 @@ sequenceDiagram
     A->>AN: Poll Alice's comm scratchpad
     AN->>ACS: Retrieve encrypted response
     ACS->>A: Decrypt with Alice's RSA private key
-
+    
     Note over A,B: Direct P2P Connection
-    A<-->B: Encrypted WebRTC communication
+    A->>B: Encrypted WebRTC communication
+    B->>A: Encrypted WebRTC communication
 ```
 
 
