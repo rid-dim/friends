@@ -133,12 +133,12 @@ sequenceDiagram
     A->>A: Encrypt handshake data with Bob's RSA public key
     A->>ACS: Write encrypted peer info to scratchpad
     
-    BCS->>B: Decrypt with Bob's RSA private key
+    ACS->>B: Decrypt with Bob's RSA private key
     B->>B: Process WebRTC offer, generate answer
     B->>B: Encrypt response with Alice's RSA public key
     B->>BCS: Write encrypted response
 
-    ACS->>A: Decrypt with Alice's RSA private key
+    BCS->>A: Decrypt with Alice's RSA private key
 
     Note over A,B: Direct P2P Connection
     A->>B: Encrypted WebRTC communication (messages, files)
