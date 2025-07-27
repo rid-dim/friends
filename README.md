@@ -4,8 +4,8 @@ A unique completely decentralized messenger that doesn't use any centralised ser
 
 ## Features
 
-The Friends Chat Application enables direct peer-to-peer communication between users via WebRTC.
-The Handshake to exchange Peer Info doesn't rely on a classic Server but utilizes the [Autonomi Network](https://www.autonomi.com) as handshake server (to be more precise Scratchpads on the autonomi network) for this.
+The Friends Chat Application enables direct peer-to-peer communication between users via WebRTC with advanced cryptographic security.
+The Handshake to exchange Peer Info doesn't rely on a classic Server but utilizes the [Autonomi Network](https://www.autonomi.com) as handshake server (to be more precise Scratchpads on the autonomi network) for this. All handshake data and friend requests are protected with RSA encryption, ensuring that only the intended recipients can access the peer information needed for establishing connections.
 
 To sign up, create an account and start chatting with a friend you can see the flow in this little demo:
 (shows just inline and playable on [the main repo on codeberg](https://codeberg.org/riddim/friends) - github users who don't want to leave the platform need to follow the link and click on "view raw")
@@ -26,11 +26,14 @@ To sign up, create an account and start chatting with a friend you can see the f
 
 ## Security Aspects
 
-The Friends Messenger ensures secure communication through multiple layers:
+The Friends Messenger ensures secure communication through multiple layers of encryption and cryptographic security:
 
-- **End-to-End Encryption**: All peer-to-peer communication is secured via WebRTC's built-in DTLS (Datagram Transport Layer Security) and SRTP (Secure Real-time Transport Protocol)
+- **RSA-Encrypted Handshake**: All WebRTC handshake data (peer information, ICE candidates, SDP offers/answers) are encrypted using RSA-OAEP hybrid encryption before being stored on Autonomi scratchpads
+- **Account-Level RSA Keys**: Each user account contains a 2048-bit RSA key pair - the private key is stored encrypted in the user's account package, while the public key is published in their profile for others to use
+- **Hybrid Encryption**: Friend requests and handshake data use AES-256-CBC encryption with RSA-encrypted AES keys, ensuring both security and performance for larger data payloads
+- **End-to-End Encryption**: All direct peer-to-peer communication is secured via WebRTC's built-in DTLS (Datagram Transport Layer Security) and SRTP (Secure Real-time Transport Protocol)
 - **Cryptographic Identity**: Each user has a unique cryptographic profile ID (96-character hex string) derived from their account creation process
-- **Decentralized Handshake**: No central server stores or has access to user data - the Autonomi Network facilitates the initial peer discovery
+- **Decentralized Handshake**: No central server stores or has access to user data - the Autonomi Network facilitates the initial peer discovery with all handshake data encrypted
 - **Perfect Forward Secrecy**: Each WebRTC session establishes new encryption keys, ensuring past communications remain secure even if keys are compromised
 - **No Data Persistence**: Messages are not stored on any server - they exist only during the active peer-to-peer session
 
@@ -93,67 +96,191 @@ sequenceDiagram
     participant B as Bob
     
     Note over A,B: Initial Setup Phase
-    A->>AS: Creates profile with friend request info
+    A->>AS: Creates profile with RSA public key
     AS-->>AFS: Contains private key & address for friend requests
-    B->>BS: Creates profile with friend request info
+    B->>BS: Creates profile with RSA public key
     BS-->>BFS: Contains private key & address for friend requests
     
-    Note over A,B: Friend Request Process
-    A->>BS: 1. Reads Bob's profile (public)
-    BS-->>A: Returns friend request scratchpad info
-    A->>BFS: 2. Posts friend request with response address
+    Note over A,B: Friend Request Process (RSA Encrypted)
+    A->>BS: 1. Reads Bob's profile (gets public RSA key)
+    BS-->>A: Returns friend request scratchpad info + public key
+    A->>BFS: 2. Posts encrypted friend request (using Bob's public key)
     
     Note over B: Bob polls for requests
     B->>BFS: 3. Checks for new friend requests
-    BFS-->>B: Returns Alice's request
-    B->>AFS: 4. Posts approval to Alice's response address
+    BFS-->>B: Returns encrypted request (decrypts with private key)
+    B->>AFS: 4. Posts encrypted approval (using Alice's public key)
     
     Note over A: Alice polls for responses
     A->>AFS: 5. Checks for friend request responses
-    AFS-->>A: Returns Bob's approval
+    AFS-->>A: Returns encrypted approval (decrypts with private key)
     
     Note over A,B: WebRTC Connection Established
     A->>B: Direct P2P communication begins
 ```
 
+### WebRTC Handshake with RSA Encryption
 
-The friendship system works through a simple scratchpad-based messaging system where the communication partners tell each other where they expect the messages and check that location in intervals:
+```mermaid
+sequenceDiagram
+    participant A as Alice
+    participant ACS as Alice's Comm Scratchpad
+    participant BCS as Bob's Comm Scratchpad
+    participant B as Bob
+    participant AN as Autonomi Network
+    
+    Note over A,B: Encrypted WebRTC Handshake
+    A->>A: Generate WebRTC offer + ICE candidates
+    A->>A: Encrypt handshake data with Bob's RSA public key
+    A->>ACS: Write encrypted peer info to scratchpad
+    ACS->>AN: Store encrypted handshake data
+    
+    B->>AN: Poll Bob's comm scratchpad
+    AN->>BCS: Retrieve encrypted handshake data
+    BCS->>B: Decrypt with Bob's RSA private key
+    B->>B: Process WebRTC offer, generate answer
+    B->>B: Encrypt response with Alice's RSA public key
+    B->>BCS: Write encrypted response
+    
+    A->>AN: Poll Alice's comm scratchpad
+    AN->>ACS: Retrieve encrypted response
+    ACS->>A: Decrypt with Alice's RSA private key
+    
+    Note over A,B: Direct P2P Connection
+    A<->>B: Encrypted WebRTC communication (DTLS/SRTP)
+```
 
-1. **Profile Discovery**: Each user's profile is stored in a public scratchpad at their Profile ID address, containing their display name, profile image, and most importantly, the access credentials for their friend request scratchpad
 
-2. **Friend Request Scratchpad**: Each user has a private scratchpad where friend requests are received. The profile contains the private key needed to write to this scratchpad. Since the private key to this Friend Request Scratchpad this will be changeable in future upgrades => to mess it up repeatedly would be costly because then the requester would need to pay for it.
+The friendship system works through a RSA-encrypted scratchpad-based messaging system where all sensitive communication data is protected from unauthorized access:
 
-3. **Request Process**: When Alice wants to add Bob as a friend:
+1. **Profile Discovery**: Each user's profile is stored in a public scratchpad at their Profile ID address, containing their display name, profile image, RSA public key, and access credentials for their friend request scratchpad
+
+2. **RSA Key Infrastructure**: Each account contains a 2048-bit RSA key pair:
+   - **Private Key**: Stored encrypted in the user's private account package on Autonomi Network
+   - **Public Key**: Published in the user's public profile for others to encrypt data sent to them
+
+3. **Encrypted Friend Request Scratchpad**: Each user has a scratchpad for receiving friend requests where:
+   - Incoming friend requests are encrypted using the recipient's RSA public key
+   - Only the recipient can decrypt them using their private key
+   - This prevents unauthorized users from reading friend request data
+
+4. **Request Process**: When Alice wants to add Bob as a friend:
    - Alice looks up Bob's Profile ID (either full 96-char ID or via public identifier)
-   - Alice reads Bob's public profile to get his friend request scratchpad details
-   - Alice posts a friend request containing her own response scratchpad address
+   - Alice reads Bob's public profile to get his RSA public key and friend request scratchpad details
+   - Alice encrypts her friend request using Bob's public key before posting it to his friend request scratchpad
 
-4. **Response Process**: Bob periodically checks his friend request scratchpad:
-   - When Bob sees Alice's request, he can choose to approve or deny
-   - If approved, Bob posts his response to Alice's specified response address
-   - Alice polls her response scratchpad and receives Bob's approval
+5. **Response Process**: Bob periodically checks his friend request scratchpad:
+   - Bob retrieves encrypted friend requests and decrypts them with his private key
+   - If approved, Bob encrypts his response using Alice's public key and posts it to Alice's response scratchpad
+   - Alice polls her response scratchpad and decrypts Bob's approval with her private key
 
-5. **Connection Establishment**: Once both parties have exchanged scratchpad addresses, they can establish a direct WebRTC connection for real-time communication
+6. **WebRTC Handshake Encryption**: During connection establishment:
+   - All WebRTC handshake data (offers, answers, ICE candidates) are encrypted using the friend's RSA public key
+   - Handshake data is transmitted via communication scratchpads on the Autonomi Network
+   - Only the intended recipient can decrypt and process the handshake information
 
-This decentralized approach ensures no central server ever sees or stores the friend relationships - everything is mediated through the Autonomi Network's scratchpad system.
+7. **Connection Establishment**: Once both parties have exchanged encrypted handshake data, they establish a direct WebRTC connection for real-time communication
+
+This decentralized approach ensures no central server ever sees or stores the friend relationships - everything is mediated through the Autonomi Network's scratchpad system with strong RSA encryption protecting all sensitive data.
+
+### RSA Encryption Implementation
+
+The Friends Messenger implements a robust hybrid encryption system that combines the security of RSA with the performance of AES:
+
+#### Key Generation and Storage
+- **Account Creation**: Each new account automatically generates a 2048-bit RSA key pair using RSA-OAEP with SHA-256
+- **Private Key Storage**: The private key is stored in PEM format within the user's encrypted account package on the Autonomi Network
+- **Public Key Publishing**: The public key is automatically published in the user's public profile, making it accessible to friends for encryption
+
+#### Hybrid Encryption Process
+When encrypting data (friend requests, WebRTC handshake data):
+
+1. **AES Key Generation**: A random 256-bit AES key and 128-bit initialization vector (IV) are generated
+2. **Data Encryption**: The actual payload is encrypted using AES-256-CBC with the generated key
+3. **Key Encryption**: The AES key is encrypted using the recipient's RSA public key (RSA-OAEP)
+4. **Container Creation**: An encrypted container is created containing:
+   - `encryptedKey`: RSA-encrypted AES key (base64 encoded)
+   - `encryptedData`: AES-encrypted payload (base64 encoded)  
+   - `iv`: Initialization vector (base64 encoded)
+
+#### Decryption Process
+When receiving encrypted data:
+
+1. **Key Extraction**: The RSA-encrypted AES key is extracted from the container
+2. **Key Decryption**: The AES key is decrypted using the recipient's RSA private key
+3. **Data Decryption**: The payload is decrypted using AES-256-CBC with the decrypted key and IV
+4. **Payload Processing**: The decrypted data is processed according to its type (friend request, handshake data, etc.)
+
+This approach ensures that:
+- Large data payloads benefit from fast AES encryption
+- Strong RSA security protects the AES keys
+- Only the intended recipient can decrypt the data
+- Performance remains optimal even with larger WebRTC handshake data
 
 ### Architecture & Technologies
 
-The Friends Messenger is built using modern web technologies:
+The Friends Messenger is built using modern web technologies with a focus on cryptographic security:
 
 - **Frontend**: Svelte/SvelteKit for reactive user interface
 - **WebRTC**: Direct peer-to-peer communication with automatic NAT traversal
 - **Autonomi Network**: Decentralized storage network for profile and friend request data
 - **Scratchpads**: Autonomi's mutable storage system for user profiles and to facilitate peer discovery
-- **Smokesigns Library**: WebRTC abstraction layer for simplified peer connections
+- **Smokesigns Library**: WebRTC abstraction layer for simplified peer connections with integrated RSA encryption support
+- **RSA Cryptography**: 2048-bit RSA-OAEP keys for encrypting handshake data and friend requests
+- **Hybrid Encryption**: AES-256-CBC for data encryption with RSA-encrypted AES keys for optimal performance
 - **Cryptographic Security**: SHA256 hashing and hex-based addressing for secure identity management
 
-### Development Features
+### Data Flow and Encryption Channels
 
-- **Multi-language Support**: UI available in English and German. Other languages will follow soonish
-- **File Sharing**: Support for sending images, videos, and files through WebRTC data channels
-- **Theme Support**: Customizable UI themes
-- **Real-time Status**: Connection status indicators
+```mermaid
+graph TB
+    subgraph "Alice's Device"
+        A1[Alice's App]
+        A2[RSA Private Key]
+        A3[Account Package<br/>Encrypted Storage]
+    end
+    
+    subgraph "Autonomi Network"
+        AN1[Alice's Profile<br/>Public Scratchpad]
+        AN2[Alice's Friend Requests<br/>Private Scratchpad]
+        AN3[Alice-Bob Comm<br/>Public Scratchpad]
+        AN4[Bob's Profile<br/>Public Scratchpad]
+        AN5[Bob's Friend Requests<br/>Private Scratchpad]
+        AN6[Bob-Alice Comm<br/>Public Scratchpad]
+    end
+    
+    subgraph "Bob's Device"
+        B1[Bob's App]
+        B2[RSA Private Key]
+        B3[Account Package<br/>Encrypted Storage]
+    end
+    
+    A1 -.->|"Reads Bob's Public Key"| AN4
+    A1 -->|"RSA Encrypted<br/>Friend Request"| AN5
+    B1 -.->|"Reads Alice's Public Key"| AN1
+    B1 -->|"RSA Encrypted<br/>Approval"| AN2
+    
+    A1 -->|"RSA Encrypted<br/>WebRTC Handshake"| AN3
+    B1 -->|"RSA Encrypted<br/>WebRTC Response"| AN6
+    
+    A1 <-.->|"Direct P2P<br/>DTLS/SRTP"| B1
+    
+    A2 -.->|"Decrypts Incoming"| A1
+    B2 -.->|"Decrypts Incoming"| B1
+    
+    style AN1 fill:#e1f5fe
+    style AN2 fill:#fff3e0
+    style AN3 fill:#f3e5f5
+    style AN4 fill:#e1f5fe
+    style AN5 fill:#fff3e0
+    style AN6 fill:#f3e5f5
+```
+
+**Data Channel Security:**
+- **Blue (Profile Scratchpads)**: Public readable, contains RSA public keys and profile info
+- **Orange (Friend Request Scratchpads)**: RSA-encrypted friend requests and approvals
+- **Purple (Communication Scratchpads)**: RSA-encrypted WebRTC handshake data
+- **Direct P2P**: End-to-end encrypted via WebRTC's DTLS/SRTP protocols
 
 ## Troubleshooting
 
