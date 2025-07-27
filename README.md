@@ -97,12 +97,12 @@ sequenceDiagram
     
     Note over A,B: Initial Setup Phase
     A->>AS: Creates profile with RSA public key
-    AS-->>AFS: Contains private key & address for friend requests
+    AS-->>AFS: Points to request scratchpad
     B->>BS: Creates profile with RSA public key
-    BS-->>BFS: Contains private key & address for friend requests
+    BS-->>BFS: Points to requests scratchpad
     
     Note over A,B: Friend Request Process (RSA Encrypted)
-    A->>BS: 1. Reads Bob's profile (gets public RSA key)
+    A->>BS: 1. Reads Bob's profile (gets public RSA key + request scratchpad info)
     BS-->>A: Returns friend request scratchpad info + public key
     A->>BFS: 2. Posts encrypted friend request (using Bob's public key)
     
@@ -128,26 +128,26 @@ sequenceDiagram
     participant BCS as Bob's Comm Scratchpad
     participant B as Bob
     participant AN as Autonomi Network
-    
+
     Note over A,B: Encrypted WebRTC Handshake
     A->>A: Generate WebRTC offer + ICE candidates
     A->>A: Encrypt handshake data with Bob's RSA public key
     A->>ACS: Write encrypted peer info to scratchpad
     ACS->>AN: Store encrypted handshake data
-    
+
     B->>AN: Poll Bob's comm scratchpad
     AN->>BCS: Retrieve encrypted handshake data
     BCS->>B: Decrypt with Bob's RSA private key
     B->>B: Process WebRTC offer, generate answer
     B->>B: Encrypt response with Alice's RSA public key
     B->>BCS: Write encrypted response
-    
+
     A->>AN: Poll Alice's comm scratchpad
     AN->>ACS: Retrieve encrypted response
     ACS->>A: Decrypt with Alice's RSA private key
-    
+
     Note over A,B: Direct P2P Connection
-    A<->>B: Encrypted WebRTC communication (DTLS/SRTP)
+    A<->B: Encrypted WebRTC communication (DTLS/SRTP)
 ```
 
 
@@ -236,7 +236,6 @@ The Friends Messenger is built using modern web technologies with a focus on cry
 graph TB
     subgraph "Alice's Device"
         A1[Alice's App]
-        A2[RSA Private Key]
         A3[Account Package<br/>Encrypted Storage]
     end
     
@@ -251,7 +250,6 @@ graph TB
     
     subgraph "Bob's Device"
         B1[Bob's App]
-        B2[RSA Private Key]
         B3[Account Package<br/>Encrypted Storage]
     end
     
@@ -264,10 +262,7 @@ graph TB
     B1 -->|"RSA Encrypted<br/>WebRTC Response"| AN6
     
     A1 <-.->|"Direct P2P<br/>DTLS/SRTP"| B1
-    
-    A2 -.->|"Decrypts Incoming"| A1
-    B2 -.->|"Decrypts Incoming"| B1
-    
+        
     style AN1 fill:#e1f5fe
     style AN2 fill:#fff3e0
     style AN3 fill:#f3e5f5
