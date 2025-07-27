@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { translations } from '../../i18n/translations';
   import AccountImageSrc from '../../AccountCreateImage.png';
+  import WalletInfo from '../components/WalletInfo.svelte';
 
   const dispatch = createEventDispatcher();
 
@@ -20,6 +21,7 @@
   let newPublicIdentifier = '';
   // Liste der bereits erfolgreich angelegten Public-Identifier kommt als Prop von außen
   export let publicIdentifiers: string[] = []; // Wird von App.svelte gereicht
+  export let backendUrl: string;
 
   $: t = translations[language];
 
@@ -69,7 +71,7 @@
     background: var(--background-color, #222);
     padding: 2rem;
     border-radius: 12px;
-    max-width: 500px;
+    max-width: 550px;
     width: 90%;
     color: var(--text-color, #fff);
   }
@@ -119,6 +121,12 @@
     margin: 0 auto;
   }
   @keyframes spin { to { transform: rotate(360deg)} }
+
+  /* Stil für Komponenten */
+  .wallet-wrapper {
+    display: flex;
+    justify-content: flex-start; /* Ausrichtung links */
+  }
 </style>
 
 <div class="wizard-overlay">
@@ -126,6 +134,12 @@
     {#if step === 0}
       <img src={AccountImageSrc} alt="Account creation" />
       <p>{t.noAccountPackageFoundQuestion}</p>
+
+      <!-- Integrierte Wallet-Komponente -->
+      <div class="wallet-wrapper">
+        <WalletInfo {backendUrl} language={language} />
+      </div>
+
       <div class="button-row">
         <button on:click={start}>{incomplete ? t.finishAccountCreation : t.createFriendsAccount}</button>
       </div>
@@ -174,4 +188,4 @@
       </div>
     {/if}
   </div>
-</div> 
+</div>

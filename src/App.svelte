@@ -2564,6 +2564,7 @@
       profileInitializing={!profileId}
       publicIdentifierLoading={publicIdentifierLoading}
       publicIdentifiers={publicIdentifiers}
+      backendUrl={backendUrl}
       on:start={handleWizardStart}
       on:setDisplayName={handleWizardSetDisplayName}
       on:setProfileImage={handleWizardSetProfileImage}

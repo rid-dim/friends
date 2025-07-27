@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import { browser } from '$app/environment';
   import { translations, type Language } from '../../i18n/translations';
+  import WalletInfo from './WalletInfo.svelte';
 
   // --- Props ---
   export let accountPackage: any;
@@ -29,7 +30,7 @@
   let newPublicIdentifier = '';
 
   // Reaktive Übersetzungen
-  $: currentTranslations = translations[language] || {} as any;
+  $: currentTranslations = translations[language] || ({} as any);
 
   function closeModal() {
     dispatch('close');
@@ -49,143 +50,153 @@
     <button class="close-button" on:click={closeModal}>×</button>
 
     <div class="settings-container">
-      <!-- Display Name -->
-      <div class="setting-group">
-        <label for="display-name">{currentTranslations.displayName}</label>
-        <input
-          id="display-name"
-          type="text"
-          placeholder={currentTranslations.chooseDisplayName}
-          bind:value={displayNameDraft}
-          on:input={(e) => scheduleDisplayNameSave((e.target as HTMLInputElement).value)}
-        />
-      </div>
-
-      <!-- Profilbild (Datamap-Adresse) -->
-      <div class="setting-group">
-        <label for="profile-image">{currentTranslations.profileImage}</label>
-        <input
-          id="profile-image"
-          type="text"
-          placeholder={currentTranslations.enterDatamapAddress}
-          value={accountPackage?.profileImage || ''}
-          on:input={async (e) => {
-            const val = (e.target as HTMLInputElement).value;
-            if (accountPackage) {
-              const ok = await updateAccountPackage({ ...accountPackage, profileImage: val });
-              if (ok && friendRequestManager) {
-                await friendRequestManager.updateProfileImage(val);
-              }
-              showNotification(currentTranslations.settingsUpdated || 'Settings updated');
-            }
-          }}
-        />
-        {#if accountPackage?.profileImage}
-          <div class="preview">
-            <img
-              src={accountPackage.profileImage.startsWith('http')
-                ? accountPackage.profileImage
-                : backendUrl
-                  ? `${backendUrl}/dweb-0/data/${accountPackage.profileImage}`
-                  : `/dweb-0/data/${accountPackage.profileImage}`}
-              alt="Profile"
-            />
-          </div>
-        {/if}
-      </div>
-
-      <!-- Theme URL -->
-      <div class="setting-group">
-        <label for="theme-url">{currentTranslations.themeUrl}</label>
-        <input
-          id="theme-url"
-          type="text"
-          placeholder={currentTranslations.enterThemeUrl}
-          value={accountPackage?.themeUrl || ''}
-          on:input={async (e) => {
-            const val = (e.target as HTMLInputElement).value;
-            if (accountPackage) {
-              const ok = await updateAccountPackage({ ...accountPackage, themeUrl: val });
-              if (ok) {
-                showNotification(currentTranslations.settingsUpdated || 'Settings updated');
-                loadTheme(val);
-              }
-            }
-          }}
-        />
-      </div>
-
-      <!-- Sprache -->
-      <div class="setting-group">
-        <label for="language">{currentTranslations.language}</label>
-        <select
-          id="language"
-          value={language}
-          on:change={(e) => {
-            const newLang = (e.target as HTMLSelectElement).value as Language;
-            changeLanguage(newLang);
-            language = newLang;
-            if (accountPackage) {
-              updateAccountPackage({ ...accountPackage, language: newLang }).then(() => {
-                showNotification(translations[newLang]?.settingsUpdated || 'Settings updated');
-              });
-            }
-          }}
-        >
-          <option value="en">English</option>
-          <option value="de">Deutsch</option>
-          <option value="fr">Français</option>
-          <option value="es">Español</option>
-          <option value="bg">Български</option>
-          <option value="ja">日本語</option>
-          <option value="ko">한국어</option>
-          <option value="zh">中文</option>
-        </select>
-      </div>
-
-      <!-- Public Identifier Management -->
-      <div class="setting-group">
-        <label>{currentTranslations.publicIdentifier}</label>
-
-        {#if publicIdentifiers.length > 0}
-          <ul class="public-identifiers">
-            {#each publicIdentifiers as id}
-              <li>{id}</li>
-            {/each}
-          </ul>
-        {/if}
-
-        {#if showAddPublicIdentifier}
-          <div class="public-id-input">
-            <input
-              type="text"
-              placeholder={currentTranslations.enterPublicIdentifier}
-              bind:value={newPublicIdentifier}
-              on:keydown={(e) => e.key === 'Enter' && createPublicIdentifier(newPublicIdentifier)}
-            />
-            <button class="confirm-button" on:click={() => createPublicIdentifier(newPublicIdentifier)} title="Add">✓</button>
-          </div>
-        {/if}
-
-        {#if !showAddPublicIdentifier}
-          <button class="add-button" on:click={() => { showAddPublicIdentifier = true; }} title="+">+</button>
-        {/if}
-      </div>
-
-      <!-- Push Notifications -->
-      {#if browser && 'Notification' in window}
+      <!-- Added wrapper for scrollable content -->
+      <div class="scrollable-content">
+        <!-- Display Name -->
         <div class="setting-group">
-          <label>{currentTranslations.pushNotifications || 'Push-Notifications'}</label>
-          <div class="notification-permission-row">
-            <span class="notification-status-badge">{notificationStatus}</span>
-            {#if Notification.permission !== 'granted'}
-              <button class="secondary-button" on:click={reRequestNotificationPermission}>
-                {currentTranslations.requestAgain}
-              </button>
-            {/if}
+          <label for="display-name">{currentTranslations.displayName}</label>
+          <input
+            id="display-name"
+            type="text"
+            placeholder={currentTranslations.chooseDisplayName}
+            bind:value={displayNameDraft}
+            on:input={(e) => scheduleDisplayNameSave((e.target as HTMLInputElement).value)}
+          />
+        </div>
+
+        <!-- Profilbild (Datamap-Adresse) -->
+        <div class="setting-group">
+          <label for="profile-image">{currentTranslations.profileImage}</label>
+          <input
+            id="profile-image"
+            type="text"
+            placeholder={currentTranslations.enterDatamapAddress}
+            value={accountPackage?.profileImage || ''}
+            on:input={async (e) => {
+              const val = (e.target as HTMLInputElement).value;
+              if (accountPackage) {
+                const ok = await updateAccountPackage({ ...accountPackage, profileImage: val });
+                if (ok && friendRequestManager) {
+                  await friendRequestManager.updateProfileImage(val);
+                }
+                showNotification(currentTranslations.settingsUpdated || 'Settings updated');
+              }
+            }}
+          />
+          {#if accountPackage?.profileImage}
+            <div class="preview">
+              <img
+                src={accountPackage.profileImage.startsWith('http')
+                  ? accountPackage.profileImage
+                  : backendUrl
+                    ? `${backendUrl}/dweb-0/data/${accountPackage.profileImage}`
+                    : `/dweb-0/data/${accountPackage.profileImage}`}
+                alt="Profile"
+              />
+            </div>
+          {/if}
+        </div>
+
+        <!-- Theme URL -->
+        <div class="setting-group">
+          <label for="theme-url">{currentTranslations.themeUrl}</label>
+          <input
+            id="theme-url"
+            type="text"
+            placeholder={currentTranslations.enterThemeUrl}
+            value={accountPackage?.themeUrl || ''}
+            on:input={async (e) => {
+              const val = (e.target as HTMLInputElement).value;
+              if (accountPackage) {
+                const ok = await updateAccountPackage({ ...accountPackage, themeUrl: val });
+                if (ok) {
+                  showNotification(currentTranslations.settingsUpdated || 'Settings updated');
+                  loadTheme(val);
+                }
+              }
+            }}
+          />
+        </div>
+
+        <!-- Sprache -->
+        <div class="setting-group">
+          <label for="language">{currentTranslations.language}</label>
+          <select
+            id="language"
+            value={language}
+            on:change={(e) => {
+              const newLang = (e.target as HTMLSelectElement).value as Language;
+              changeLanguage(newLang);
+              language = newLang;
+              if (accountPackage) {
+                updateAccountPackage({ ...accountPackage, language: newLang }).then(() => {
+                  showNotification(translations[newLang]?.settingsUpdated || 'Settings updated');
+                });
+              }
+            }}
+          >
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+            <option value="fr">Français</option>
+            <option value="es">Español</option>
+            <option value="bg">Български</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="zh">中文</option>
+          </select>
+        </div>
+
+        <!-- Public Identifier Management -->
+        <div class="setting-group">
+          <label>{currentTranslations.publicIdentifier}</label>
+
+          {#if publicIdentifiers.length > 0}
+            <ul class="public-identifiers">
+              {#each publicIdentifiers as id}
+                <li>{id}</li>
+              {/each}
+            </ul>
+          {/if}
+
+          {#if showAddPublicIdentifier}
+            <div class="public-id-input">
+              <input
+                type="text"
+                placeholder={currentTranslations.enterPublicIdentifier}
+                bind:value={newPublicIdentifier}
+                on:keydown={(e) => e.key === 'Enter' && createPublicIdentifier(newPublicIdentifier)}
+              />
+              <button class="confirm-button" on:click={() => createPublicIdentifier(newPublicIdentifier)} title="Add">✓</button>
+            </div>
+          {/if}
+
+          {#if !showAddPublicIdentifier}
+            <button class="add-button" on:click={() => { showAddPublicIdentifier = true; }} title="+">+</button>
+          {/if}
+        </div>
+
+        <!-- Push Notifications -->
+        {#if browser && 'Notification' in window}
+          <div class="setting-group">
+            <label>{currentTranslations.pushNotifications || 'Push-Notifications'}</label>
+            <div class="notification-permission-row">
+              <span class="notification-status-badge">{notificationStatus}</span>
+              {#if Notification.permission !== 'granted'}
+                <button class="secondary-button" on:click={reRequestNotificationPermission}>
+                  {currentTranslations.requestAgain}
+                </button>
+              {/if}
+            </div>
+          </div>
+        {/if}
+
+        <!-- Connected Wallet -->
+        <div class="setting-group wallet-container">
+          <div class="wallet-wrapper">
+            <WalletInfo {backendUrl} language={language} gray={true} />
           </div>
         </div>
-      {/if}
+      </div>
     </div>
 
     <div class="modal-buttons">
@@ -211,16 +222,19 @@
   .modal-content {
     background: var(--background-color);
     padding: 2rem;
+    padding-right: calc(2rem + 0.5rem); /* Adjust padding to account for scrollbar width */
     border-radius: 12px;
-    max-width: 500px;
+    max-width: 550px;
     width: 90%;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     position: relative;
+    max-height: 90vh;
+    overflow-y: hidden;
   }
   .close-button {
     position: absolute;
     top: 1rem;
     right: 1rem;
+    z-index: 10; /* Ensure it appears above other elements */
     background: none;
     border: none;
     font-size: 1.5rem;
@@ -247,4 +261,16 @@
   .modal-buttons { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem; }
   .primary-button { padding: 0.6rem 1.2rem; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 500; background: var(--notification-color); color: #fff; }
   .primary-button:hover { opacity: 0.8; }
-</style> 
+
+  /* Wallet-Info-Styles wurden in die WalletInfo.svelte Komponente verschoben */
+  
+  .wallet-wrapper {
+    display: flex;
+    justify-content: flex-start; /* Ausrichtung links */
+  }
+
+  .scrollable-content {
+    max-height: calc(90vh - 12rem); /* Adjust for padding and header/footer */
+    overflow-y: auto;
+  }
+</style>
