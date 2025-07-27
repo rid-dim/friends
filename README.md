@@ -147,7 +147,7 @@ sequenceDiagram
     ACS->>A: Decrypt with Alice's RSA private key
 
     Note over A,B: Direct P2P Connection
-    A<->B: Encrypted WebRTC communication - DTLS/SRTP
+    A<->B: Encrypted WebRTC communication
 ```
 
 
@@ -261,7 +261,7 @@ graph TB
     A1 -->|"RSA Encrypted<br/>WebRTC Handshake"| AN3
     B1 -->|"RSA Encrypted<br/>WebRTC Response"| AN6
     
-    A1 <-.->|"Direct P2P<br/>DTLS/SRTP"| B1
+    A1 <-.->|"Direct P2P<br/>DTLS/SRTP<br><br>Messages,Files"| B1
         
     style AN1 fill:#e1f5fe
     style AN2 fill:#fff3e0
