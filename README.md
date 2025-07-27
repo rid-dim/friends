@@ -127,28 +127,23 @@ sequenceDiagram
     participant ACS as Alice's Comm Scratchpad
     participant BCS as Bob's Comm Scratchpad
     participant B as Bob
-    participant AN as Autonomi Network
 
     Note over A,B: Encrypted WebRTC Handshake
     A->>A: Generate WebRTC offer + ICE candidates
     A->>A: Encrypt handshake data with Bob's RSA public key
     A->>ACS: Write encrypted peer info to scratchpad
-    ACS->>AN: Store encrypted handshake data
-
-    B->>AN: Poll Bob's comm scratchpad
+    
     AN->>BCS: Retrieve encrypted handshake data
     BCS->>B: Decrypt with Bob's RSA private key
     B->>B: Process WebRTC offer, generate answer
     B->>B: Encrypt response with Alice's RSA public key
     B->>BCS: Write encrypted response
 
-    A->>AN: Poll Alice's comm scratchpad
-    AN->>ACS: Retrieve encrypted response
     ACS->>A: Decrypt with Alice's RSA private key
-    
+
     Note over A,B: Direct P2P Connection
-    A->>B: Encrypted WebRTC communication
-    B->>A: Encrypted WebRTC communication
+    A->>B: Encrypted WebRTC communication (messages, files)
+    B->>A: Encrypted WebRTC communication (messages, files)
 ```
 
 
