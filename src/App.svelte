@@ -269,23 +269,13 @@
         }
       } else if (response.status === 404) {
         // Create new scratchpad
-        const friendInfo = {
-          type: 'friend-communication',
-          friendProfileId: friendProfileId,
-          createdAt: new Date().toISOString(),
-          accountName: accountName || null
-        };
-        
-        const friendInfoJson = JSON.stringify(friendInfo);
-        const friendInfoBytes = jsonToByteArray(friendInfoJson);
-        
         const scratchpadPayload = {
           counter: 0,
           data_encoding: 0,
           dweb_type: "PublicScratchpad",
           encrypted_data: [0],
           scratchpad_address: "string",
-          unencrypted_data: friendInfoBytes
+          unencrypted_data: [0]
         };
         
         const createResponse = await fetch(url, {
