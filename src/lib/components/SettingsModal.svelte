@@ -16,6 +16,7 @@
   // Funktionen, die aus der Eltern-Komponente gereicht werden
   export let changeLanguage: (lang: Language) => void;
   export let updateAccountPackage: (data: any) => Promise<boolean>;
+  export let ensureKeyPair: () => Promise<void>;
   export let loadTheme: (url: string) => void;
   export let scheduleDisplayNameSave: (name: string) => void;
   export let reRequestNotificationPermission: () => Promise<void>;
@@ -34,6 +35,16 @@
 
   function closeModal() {
     dispatch('close');
+  }
+
+  // RSA Keypair regeneration
+  async function regenerateKeyPair() {
+    if (!accountPackage) return;
+    const ok = await updateAccountPackage({ ...accountPackage, privateKeyPem: undefined });
+    if (ok) {
+      await ensureKeyPair();
+      showNotification(currentTranslations.settingsUpdated || 'Settings updated');
+    }
   }
 </script>
 
@@ -189,6 +200,14 @@
             </div>
           </div>
         {/if}
+
+        <!-- RSA Keypair Regeneration -->
+        <div class="setting-group">
+          <label>RSA Keypair</label>
+          <button class="secondary-button" on:click={regenerateKeyPair}>
+            RSA-Keypair neu generieren
+          </button>
+        </div>
 
         <!-- Connected Wallet -->
         <div class="setting-group wallet-container">

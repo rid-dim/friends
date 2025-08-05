@@ -2675,6 +2675,7 @@
       {scheduleDisplayNameSave}
       {reRequestNotificationPermission}
       {createPublicIdentifier}
+      {ensureKeyPair}
       {showNotification}
       on:close={() => showSettingsModal = false}
     />
