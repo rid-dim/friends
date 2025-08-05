@@ -8,11 +8,14 @@
   export let selectedFriendId: string | null = null;
   export let profileId: string = '';
   export let myUsername: string = 'User';
-  export let handshakeCountdowns: Record<string, number | {
+  export let handshakeCountdowns: Record<string, string | number | {
     text: string;
     dots?: string;
     seconds?: number;
-    isConnecting: boolean;
+    isConnecting?: boolean;
+    isLastSeen?: boolean;
+    relativeText?: string;
+    absoluteText?: string;
   }> = {};
   export let language: 'en' | 'de' = 'en';
   export let profileImage: string = '';
@@ -122,7 +125,9 @@
           <div class="friend-name">{friend.displayName}</div>
           {#if friend.peerId && !friend.isConnected && handshakeCountdowns[friend.peerId] !== undefined}
             <div class="countdown">
-              {#if typeof handshakeCountdowns[friend.peerId] === 'number'}
+              {#if typeof handshakeCountdowns[friend.peerId] === 'string'}
+                {handshakeCountdowns[friend.peerId]}
+              {:else if typeof handshakeCountdowns[friend.peerId] === 'number'}
                 {handshakeCountdowns[friend.peerId]}s
               {:else if typeof handshakeCountdowns[friend.peerId] === 'object'}
                 {#if (handshakeCountdowns[friend.peerId] as any).isConnecting}

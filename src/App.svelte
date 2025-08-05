@@ -26,6 +26,7 @@
   // Import translations
   import { t, language as langStore, changeLanguage } from './i18n/i18n';
   import { translations, type Language } from './i18n/translations';
+  import { createLastSeenText } from './lib/utils/presence';
   
   // Backend and account package related types
   interface AccountPackage {
@@ -81,12 +82,22 @@
   // Handshake server URL is no longer needed - using DwebConnector with scratchpads
   let handshakeStatus = '';
   let handshakeCountdown = '';
-  let handshakeCountdowns: Record<string, number | {
+  // Map für Status-Informationen eines Freundes
+  // 1. string  → "last seen ..."
+  // 2. number  → Countdown in Sekunden (Legacy)
+  // 3. object  → Details für Verbindung (Legacy)
+  let handshakeCountdowns: Record<string, string | number | {
     text: string;
     dots?: string;
     seconds?: number;
-    isConnecting: boolean;
+    isConnecting?: boolean;
+    isLastSeen?: boolean;
+    relativeText?: string;
+    absoluteText?: string;
   }> = {};
+
+  // Speichert den Timestamp (ms) der letzten Presence-Nachricht pro Peer
+  let lastSeenTimestamps: Record<string, number> = {};
   let handshakeLoopRunning = false;
   
   // UI state
@@ -145,7 +156,8 @@
     connectionManager = new ConnectionManager({
       onMessage: handleIncomingMessage,
       onConnectionStateChange: handleConnectionStateChange,
-      onError: handleConnectionError
+      onError: handleConnectionError,
+      onPresenceUpdate: handlePresenceUpdate
     });
     
     // Parse URL parameters
@@ -850,6 +862,11 @@
   }
   
   // Handle incoming messages from peers
+  // Wird von ConnectionManager aufgerufen, wenn smokesigns einen Presence-Timestamp meldet
+  function handlePresenceUpdate(peerId: string, ts: number) {
+    lastSeenTimestamps[peerId] = ts;
+  }
+
   function handleIncomingMessage(peerId: string, data: any) {
     console.log(`📨 Incoming message from ${peerId}:`, data.type);
     
@@ -919,6 +936,13 @@
         handleFileChunk(peerId, data);
         break;
         
+      case 'presence':
+        // Update Last-Seen-Information
+        if (typeof data.timestamp === 'number') {
+          lastSeenTimestamps[peerId] = data.timestamp;
+        }
+        break;
+      
       case 'heartbeat':
         // Connection is alive
         console.log(`[${peerId}] Heartbeat received`);
@@ -1499,49 +1523,34 @@
     }
   }
   
-  // Update status display for each friend
-  let dotCount = 0;
-  let dotUpdateCounter = 0;
+  // Update status display für jeden Freund
+  // (dotCount / Animation nicht mehr benötigt)
+  
   
   function updateCountdowns() {
-    // Update dot animation counter (changes every 500ms)
-    dotUpdateCounter = (dotUpdateCounter + 1) % 2;
-    if (dotUpdateCounter === 0) {
-      dotCount = (dotCount + 1) % 3;
-    }
-    
-    // Get current time to determine if we're in the connecting phase
-    const now = new Date();
-    const seconds = now.getSeconds();
-    const isConnectingPhase = seconds < 35; // First 35 seconds after full minute
-    
-    // Update status for all disconnected friends
+    // Anzeige des "last seen"-Status je Freund
+    const nowMs = Date.now();
+
     friends.forEach(friend => {
-      if (!friend.peerId || friend.isConnected) {
-        return; // Skip connected friends or those without peerId
+      if (!friend.peerId) return;
+
+      // Entferne Status für verbundene Freunde
+      if (friend.isConnected) {
+        if (handshakeCountdowns[friend.peerId] !== undefined) {
+          delete handshakeCountdowns[friend.peerId];
+        }
+        return;
       }
-      
-      // Format the status display
-      if (isConnectingPhase) {
-        // In connecting phase, show "connecting" with animated dots
-        const dots = '.'.repeat(dotCount + 1);
-        handshakeCountdowns[friend.peerId] = { 
-          text: 'connecting',
-          dots: dots,
-          isConnecting: true
-        };
+
+      const lastSeen = lastSeenTimestamps[friend.peerId];
+      if (lastSeen) {
+        handshakeCountdowns[friend.peerId] = createLastSeenText(lastSeen, nowMs);
       } else {
-        // After connecting phase, show countdown to next attempt
-        const timeToNextMinute = 60 - seconds;
-        handshakeCountdowns[friend.peerId] = {
-          text: 'retrying in',
-          seconds: timeToNextMinute,
-          isConnecting: false
-        };
+        handshakeCountdowns[friend.peerId] = 'last seen: unknown';
       }
     });
-    
-    // Trigger Svelte reactivity by reassigning the object
+
+    // Reaktivität auslösen
     handshakeCountdowns = { ...handshakeCountdowns };
   }
   

@@ -7,6 +7,8 @@ export interface ConnectionEvents {
   onMessage: (peerId: string, data: any) => void;
   onConnectionStateChange: (peerId: string, state: RTCPeerConnectionState) => void;
   onError: (peerId: string, error: Error) => void;
+  /** Wird ausgelöst, wenn vom smokesigns-Link ein Presence-Timestamp empfangen wurde */
+  onPresenceUpdate?: (peerId: string, timestamp: number) => void;
 }
 
 // Common interface for both connection types
@@ -111,20 +113,28 @@ export class SinglePeerConnection {
             }
           }
         },
-        onClose: () => {
-          console.log(`[${this.peerId}] Link closed`);
-          this.isConnected = false;
-          this.events.onConnectionStateChange(this.peerId, 'disconnected');
-        },
-        onError: (error) => {
-          console.error(`[${this.peerId}] Link error:`, error);
-          this.events.onError(this.peerId, error);
-        },
-        onMessage: (data) => {
-          console.log(`[${this.peerId}] Received message:`, data);
-          this.events.onMessage(this.peerId, data);
-        }
-      });
+          onClose: () => {
+            console.log(`[${this.peerId}] Link closed`);
+            this.isConnected = false;
+            this.events.onConnectionStateChange(this.peerId, 'disconnected');
+          },
+          onError: (error) => {
+            console.error(`[${this.peerId}] Link error:`, error);
+            this.events.onError(this.peerId, error);
+          },
+          onMessage: (data) => {
+            console.log(`[${this.peerId}] Received message:`, data);
+            this.events.onMessage(this.peerId, data);
+          },
+          onPresenceUpdate: (ts: number) => {
+            this.events.onPresenceUpdate?.(this.peerId, ts);
+          }
+        });
+
+        // Initial presence read um sofort lastSeen zu setzen
+
+
+
       
       // Start the connection process
       console.log(`[${this.peerId}] Starting smokesigns connection...`);
