@@ -17,9 +17,14 @@
  */
 export function createLastSeenText(
   lastSeenTs: number,
-  nowMs: number = Date.now(),
-  locale: string | undefined = undefined
+  opts: {
+    nowMs?: number;
+    lang: import('../../i18n/translations').Language;
+    t: (key: string) => string;
+  }
 ): string {
+  const { nowMs = Date.now(), lang, t } = opts;
+
   const diffMs = nowMs - lastSeenTs;
   const oneMinute = 60 * 1000;
   const oneHour = 60 * oneMinute;
@@ -28,15 +33,14 @@ export function createLastSeenText(
   if (diffMs < oneDay) {
     if (diffMs < oneHour) {
       const minutes = Math.max(1, Math.floor(diffMs / oneMinute));
-      return `last seen ${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+      return t('lastSeenMinutes').replace('{n}', String(minutes));
     }
     const hours = Math.floor(diffMs / oneHour);
-    return `last seen ${hours} hour${hours === 1 ? '' : 's'} ago`;
+    return t('lastSeenHours').replace('{n}', String(hours));
   }
 
-  // > 24 h
   const date = new Date(lastSeenTs);
-  return `last seen at: ${date.toLocaleString(locale)}`;
+  return t('lastSeenAt').replace('{ts}', date.toLocaleString());
 }
 
 

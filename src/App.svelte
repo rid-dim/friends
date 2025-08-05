@@ -1544,9 +1544,9 @@
 
       const lastSeen = lastSeenTimestamps[friend.peerId];
       if (lastSeen) {
-        handshakeCountdowns[friend.peerId] = createLastSeenText(lastSeen, nowMs);
+        handshakeCountdowns[friend.peerId] = createLastSeenText(lastSeen, { lang: language, t: (key) => translations[language][key as any] as string, nowMs: nowMs });
       } else {
-        handshakeCountdowns[friend.peerId] = 'last seen: unknown';
+        handshakeCountdowns[friend.peerId] = translations[language]['lastSeenUnknown'];
       }
     });
 

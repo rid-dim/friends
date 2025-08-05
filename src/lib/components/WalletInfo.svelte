@@ -15,15 +15,10 @@
   $: t = translations[language] || ({} as any);
 
   async function fetchWalletInfo() {
-    if (!backendUrl) {
-      error = "No backend URL provided";
-      loading = false;
-      return;
-    }
-
     try {
       loading = true;
-      const response = await fetch(`${backendUrl}/dweb-0/wallet-balance`);
+      const url = backendUrl ? `${backendUrl}/dweb-0/wallet-balance` : '/dweb-0/wallet-balance';
+      const response = await fetch(url);
       if (response.ok) {
         walletInfo = await response.json();
       } else {
