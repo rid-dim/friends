@@ -203,10 +203,8 @@
 
         <!-- RSA Keypair Regeneration -->
         <div class="setting-group">
-          <label>RSA Keypair</label>
-          <button class="secondary-button" on:click={regenerateKeyPair}>
-            RSA-Keypair neu generieren
-          </button>
+          <label>{currentTranslations.encryption}</label>
+          <button on:click={regenerateKeyPair}>{currentTranslations.regenerateKey}</button>
         </div>
 
         <!-- Connected Wallet -->

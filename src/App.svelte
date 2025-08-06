@@ -216,9 +216,9 @@
   function buildScratchpadUrl(): string {
     const baseUrl = backendUrl ? `${backendUrl}/dweb-0/scratchpad-private` : '/dweb-0/scratchpad-private';
     if (accountName) {
-      return `${baseUrl}?object_name=${encodeURIComponent(accountName)}`;
+      return `${baseUrl}?tries=3&object_name=${encodeURIComponent(accountName)}`;
     }
-    return baseUrl;
+    return `${baseUrl}?tries=3`;
   }
   
   // Build communication object name for public scratchpad
@@ -233,7 +233,7 @@
   function buildPublicScratchpadUrl(): string {
     const objectName = buildCommObjectName();
     const baseUrl = backendUrl ? `${backendUrl}/dweb-0/scratchpad-public` : '/dweb-0/scratchpad-public';
-    return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
+    return `${baseUrl}?tries=3&object_name=${encodeURIComponent(objectName)}`;
   }
   
   // Build friend-specific scratchpad URL
@@ -243,7 +243,7 @@
     }
     const objectName = `${friendProfileId}comm${profileId}`;
     const baseUrl = backendUrl ? `${backendUrl}/dweb-0/scratchpad-public` : '/dweb-0/scratchpad-public';
-    return `${baseUrl}?object_name=${encodeURIComponent(objectName)}`;
+    return `${baseUrl}?tries=3&object_name=${encodeURIComponent(objectName)}`;
   }
   
   // Create or get friend scratchpad
@@ -574,12 +574,16 @@
           console.log('✅ Successfully loaded account package:', accountPackage);
           
           // Check version and migrate if needed
-          if (!accountPackage.version || accountPackage.version < 3) {
-            console.log(`🔄 Migrating account package from version ${accountPackage.version || 0} to version 3`);
-            // Entferne alle bestehenden Freunde, da ab Version 3 die profileId als eindeutiger Schlüssel verwendet wird
-            accountPackage.friends = [];
-            accountPackage.version = 3;
-            showNotification('Account package wurde aktualisiert. Bitte füge deine Freunde erneut hinzu.');
+          if (!accountPackage.version || accountPackage.version < 5) {
+            console.log(`🔄 Migrating account package from version ${accountPackage.version || 0} to version 5`);
+            // es gab Änderungen an der Struktur der Freundesliste
+            if (accountPackage.version < 4) {
+              accountPackage.friends = [];
+              showNotification('Account package updated. Please add your friends again.');
+            }
+            accountPackage.version = 5;
+            // Trigger key regeneration
+            await ensureKeyPair(true); // force regeneration
           }
           
           return accountPackage as AccountPackage;
@@ -2477,7 +2481,7 @@
   // Connection status is now updated reactively above
 
   // Stelle sicher, dass ein RSA-Schlüsselpaar existiert und PublicKey im Profil gespeichert ist
-  async function ensureKeyPair() {
+  async function ensureKeyPair(force: boolean = false) {
     if (!accountPackage || !friendRequestManager || !profileId) return;
 
     // Hilfsfunktionen
@@ -2489,7 +2493,7 @@
     }
 
     let shouldGenerate = false;
-    if (!accountPackage.privateKeyPem) {
+    if (force || !accountPackage.privateKeyPem) {
       shouldGenerate = true;
     } else {
       // Prüfen, ob im Profil bereits ein PublicKey liegt
@@ -2575,10 +2579,6 @@
   <div class="header-container">
     <StatusBar 
       appTitle="Friends"
-      {connectionStatus}
-      {handshakeStatus}
-      {handshakeCountdown}
-      {notificationStatus}
       username={accountPackage?.username}
       language={language}
       on:openSettings={() => showSettingsModal = true}

@@ -3,10 +3,6 @@
   import { t } from '../../i18n/i18n';
 
   export let appTitle: string = 'Friends';
-  export let connectionStatus: string = 'Disconnected';
-  export let handshakeStatus: string = '';
-  export let handshakeCountdown: string = '';
-  export let notificationStatus: string = '';
   
   const dispatch = createEventDispatcher();
   
@@ -28,35 +24,13 @@
     </sub>
   </h1>
   
-  <div class="status-info">
-    <div class="connection-status">
-      <span class="label">{$t('status')}:</span>
-      <span class="value">{connectionStatus}</span>
-    </div>
-    
-    {#if handshakeStatus}
-      <div class="handshake-status">
-        <span class="label">{$t('handshake')}:</span>
-        <span class="value">{handshakeStatus}</span>
-        {#if handshakeCountdown}
-          <span class="countdown">{handshakeCountdown}</span>
-        {/if}
-      </div>
-    {/if}
-    
-    {#if notificationStatus}
-      <div class="notification-status">
-        <span class="label">🔔</span>
-        <span class="value">{notificationStatus}</span>
-      </div>
-    {/if}
-  </div>
+
 </div>
 
 <style>
   .status-bar {
     display: grid;
-    grid-template-columns: minmax(100px, auto) 1fr minmax(100px, auto);
+    grid-template-columns: minmax(100px, auto) 1fr;
     align-items: center;
     gap: 1rem;
     padding: 1rem;
@@ -126,52 +100,12 @@
     opacity: 1;
   }
   
-  .status-info {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.9rem;
-    justify-self: end;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    align-items: center;
-  }
-  
-  .connection-status,
-  .handshake-status,
-  .notification-status {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    white-space: nowrap;
-  }
-  
-  .label {
-    opacity: 0.7;
-  }
-  
-  .value {
-    font-weight: 500;
-  }
-  
-  .countdown {
-    font-family: monospace;
-    background: var(--background-color);
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-    font-size: 0.85rem;
-  }
 
-  @media (max-width: 980px) {
-    .status-info {
-      font-size: 0.8rem;
-      gap: 0.75rem;
-    }
-  }
 
   @media (max-width: 768px) {
     .status-bar {
       grid-template-columns: 1fr;
-      grid-template-rows: auto auto auto;
+      grid-template-rows: auto auto;
       gap: 0.5rem;
       padding: 0.75rem;
     }
@@ -184,28 +118,6 @@
     h1 {
       order: 1;
       margin-bottom: 0.5rem;
-    }
-    
-    .status-info {
-      justify-self: center;
-      order: 3;
-      margin-top: 0.5rem;
-      width: 100%;
-      justify-content: center;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .status-info {
-      flex-direction: column;
-      gap: 0.5rem;
-      align-items: center;
-    }
-    
-    .connection-status,
-    .handshake-status,
-    .notification-status {
-      justify-content: center;
     }
   }
 </style> 
