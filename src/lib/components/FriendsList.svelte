@@ -27,11 +27,9 @@
   
   let showAvatarModal = false;
   
+  import { buildDataUrl } from '../utils/imageUrl';
   // Build full URL for profile image
-  $: profileImageUrl = profileImage ? 
-    (profileImage.startsWith('http') ? profileImage : 
-     backendUrl ? `${backendUrl}/dweb-0/data/${profileImage}` : `/dweb-0/data/${profileImage}`) : 
-    '';
+  $: profileImageUrl = profileImage ? buildDataUrl(profileImage, backendUrl) : '';
   
   function handleAddFriend() {
     // Just dispatch the event to open the modal
@@ -73,7 +71,7 @@
     showAvatarModal = false;
   }
   
-  $: t = translations[language];
+  $: t = translations[language] as Record<string, string>;
 </script>
 
 <div class="friends-list">

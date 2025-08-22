@@ -42,8 +42,9 @@
   let avatarUrl: string | null = null;
   let showAvatarModal = false;
 
+  import { buildDataUrl } from '../utils/imageUrl';
   $: {
-    avatarUrl = friend?.profileImage ? (friend.profileImage.startsWith('http') ? friend.profileImage : backendUrl ? `${backendUrl}/dweb-0/data/${friend.profileImage}` : `/dweb-0/data/${friend.profileImage}`) : null;
+    avatarUrl = friend?.profileImage ? buildDataUrl(friend.profileImage, backendUrl) : null;
     console.log('Constructed avatar URL:', avatarUrl);
   }
 
@@ -113,7 +114,7 @@
     scrollToBottom();
   }
   
-  $: t = translations[language];
+  $: t = translations[language] as Record<string, string>;
   $: welcomeTitle = language === 'de' ? 'Willkommen!' : 'Welcome!';
   $: welcomeTip = language === 'de' ? '⬅️  Füge links über "+ Freund" neue Kontakte hinzu' : '⬅️  Use "+ Add Friend" on the left to add contacts';
 

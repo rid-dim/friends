@@ -12,10 +12,8 @@
   $: t = translations[language as keyof typeof translations] || translations.en;
   
   // Build full URL for profile image
-  $: profileImageUrl = profileImage ? 
-    (profileImage.startsWith('http') ? profileImage : 
-     backendUrl ? `${backendUrl}/dweb-0/data/${profileImage}` : `/dweb-0/data/${profileImage}`) : 
-    '';
+  import { buildDataUrl } from '../utils/imageUrl';
+  $: profileImageUrl = profileImage ? buildDataUrl(profileImage, backendUrl) : '';
   
   function handleProfileImageChange(event: Event) {
     const input = event.target as HTMLInputElement;

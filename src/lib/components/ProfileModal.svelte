@@ -7,15 +7,18 @@
   export let friendRequest: FriendRequest;
   export let profileData: ProfileData | null;
   export let friendRequestManager: any;
+  $: backendUrl = friendRequestManager?.backendUrl || '';
+  import { buildDataUrl } from '../utils/imageUrl';
+  $: profileImageUrl = profileData?.profileImage ? buildDataUrl(profileData.profileImage, backendUrl) : '';
   
   const dispatch = createEventDispatcher();
-  const t = translations[language];
+  const t = translations[language] as Record<string, string>;
   
-  let displayName = profileData?.accountname || '';
+  let displayName = (profileData?.accountname || (profileData as any)?.accountName || '');
 
   // Prefill displayName whenever profileData changes (only if empty)
-  $: if (profileData && !displayName) {
-    displayName = profileData.accountname;
+  $: if (!displayName && (profileData?.accountname || (profileData as any)?.accountName)) {
+    displayName = profileData?.accountname || (profileData as any)?.accountName || '';
   }
   let loading = false;
   let error = '';
@@ -29,7 +32,7 @@
   }
   
   async function acceptRequest() {
-    if (!displayName.trim()) {
+    if (!((displayName || '').trim())) {
       error = t.enterDisplayName;
       return;
     }
@@ -60,17 +63,17 @@
       <div class="profile-info">
         {#if profileData.profileImage}
           <img 
-            src={profileData.profileImage} 
-            alt={profileData.accountname}
+            src={profileImageUrl}
+            alt={displayName}
             class="profile-image"
           />
         {:else}
           <div class="profile-image-placeholder">
-            {profileData.accountname.charAt(0).toUpperCase()}
+            {(displayName || '?').charAt(0).toUpperCase()}
           </div>
         {/if}
         <div class="profile-details">
-          <p class="account-name">{profileData.accountname}</p>
+          <p class="account-name">{displayName}</p>
           <p class="profile-id-display">{friendRequest.profileId}</p>
           <p class="request-time">
             {new Date(friendRequest.time).toLocaleString(language)}
@@ -102,7 +105,7 @@
         </button>
         <button 
           on:click={acceptRequest} 
-          disabled={loading || !displayName.trim()}
+          disabled={loading || !((displayName || '').trim())}
           class="primary-button"
         >
           {loading ? t.sending : t.acceptFriendRequest}
@@ -177,7 +180,7 @@
   .profile-image-placeholder {
     width: 60px;
     height: 60px;
-    border-radius: 50%;
+    border-radius: 12px;
     object-fit: cover;
   }
   

@@ -3,6 +3,7 @@
   import { browser } from '$app/environment';
   import { translations, type Language } from '../../i18n/translations';
   import WalletInfo from './WalletInfo.svelte';
+  import { buildDataUrl } from '../utils/imageUrl';
 
   // --- Props ---
   export let accountPackage: any;
@@ -10,7 +11,7 @@
   export let backendUrl: string;
   export let notificationStatus: string;
   export let publicIdentifiers: string[] = [];
-  export let publicIdentifierLoading = false;
+  // Entfernt: ungenutztes Prop publicIdentifierLoading
   export let friendRequestManager: any = null;
 
   // Funktionen, die aus der Eltern-Komponente gereicht werden
@@ -39,12 +40,9 @@
 
   // RSA Keypair regeneration
   async function regenerateKeyPair() {
-    if (!accountPackage) return;
-    const ok = await updateAccountPackage({ ...accountPackage, privateKeyPem: undefined });
-    if (ok) {
-      await ensureKeyPair();
-      showNotification(currentTranslations.settingsUpdated || 'Settings updated');
-    }
+    // Kein PrivateKey im Account-Package, nur Re-Derivation triggern
+    await ensureKeyPair();
+    showNotification(currentTranslations.settingsUpdated || 'Settings updated');
   }
 </script>
 
@@ -53,6 +51,7 @@
   on:click|self={closeModal}
   on:keydown={(e) => e.key === 'Escape' && closeModal()}
   role="dialog"
+  tabindex="-1"
   aria-modal="true"
   aria-labelledby="settings-title"
 >
@@ -97,11 +96,7 @@
           {#if accountPackage?.profileImage}
             <div class="preview">
               <img
-                src={accountPackage.profileImage.startsWith('http')
-                  ? accountPackage.profileImage
-                  : backendUrl
-                    ? `${backendUrl}/dweb-0/data/${accountPackage.profileImage}`
-                    : `/dweb-0/data/${accountPackage.profileImage}`}
+                src={buildDataUrl(accountPackage.profileImage, backendUrl)}
                 alt="Profile"
               />
             </div>
@@ -159,7 +154,7 @@
 
         <!-- Public Identifier Management -->
         <div class="setting-group">
-          <label>{currentTranslations.publicIdentifier}</label>
+          <div class="section-label">{currentTranslations.publicIdentifier}</div>
 
           {#if publicIdentifiers.length > 0}
             <ul class="public-identifiers">
@@ -189,7 +184,7 @@
         <!-- Push Notifications -->
         {#if browser && 'Notification' in window}
           <div class="setting-group">
-            <label>{currentTranslations.pushNotifications || 'Push-Notifications'}</label>
+          <div class="section-label">{currentTranslations.pushNotifications || 'Push-Notifications'}</div>
             <div class="notification-permission-row">
               <span class="notification-status-badge">{notificationStatus}</span>
               {#if Notification.permission !== 'granted'}
@@ -203,7 +198,7 @@
 
         <!-- RSA Keypair Regeneration -->
         <div class="setting-group">
-          <label>{currentTranslations.encryption}</label>
+          <div class="section-label">{currentTranslations.encryption}</div>
           <button on:click={regenerateKeyPair}>{currentTranslations.regenerateKey}</button>
         </div>
 

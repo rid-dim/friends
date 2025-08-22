@@ -25,9 +25,14 @@
   
   // Import translations
   import { t, language as langStore, changeLanguage } from './i18n/i18n';
-  import { translations, type Language } from './i18n/translations';
+  import { translations, type Language, getTranslation } from './i18n/translations';
   import { createLastSeenText } from './lib/utils/presence';
   
+  // DWeb Service und gemeinsame Secrets
+  import { getDwebService } from './lib/utils/dwebService';
+  import { DwebService } from './lib/utils/dweb/DwebService';
+  import { FRIENDS_SHARED_GLOBAL_SECRET } from './lib/webrtc/FriendRequestManager';
+  import { deriveDeterministicRsaFromScratchpadAddress } from './lib/utils/crypto/deterministicRsa';
   // Backend and account package related types
   interface AccountPackage {
     version: number; // Version of the account package format
@@ -108,6 +113,8 @@
   
   // Friend Request state
   let friendRequestManager: FriendRequestManager | null = null;
+  // In-Memory Private Key (nie im Account-Package oder LocalStorage speichern)
+  let myPrivateKeyPem: string | undefined = undefined;
   let showFriendRequestModal = false;
   let showProfileModal = false;
   let pendingFriendRequests: FriendRequest[] = [];
@@ -140,7 +147,7 @@
   }
   
   // Get translations for current language
-  $: currentTranslations = translations[language];
+  $: currentTranslations = translations[language] as any;
   
   // Update connectionStatus when language changes
   $: connectionStatus = connectionStatus || (currentTranslations.initializing || 'Initializing...');
@@ -248,75 +255,28 @@
   
   // Create or get friend scratchpad
   async function createOrGetFriendScratchpad(friendProfileId: string): Promise<string> {
-    const url = buildFriendScratchpadUrl(friendProfileId);
-    console.log('🌐 Creating/getting friend scratchpad:', url);
-    
+    const objectName = `${friendProfileId}comm${profileId}`;
+    const service = getDwebService(backendUrl || null, 'friends');
     try {
-      // First try to get existing scratchpad
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'accept': 'application/json',
-          'Ant-App-ID': 'friends'
-        }
-      });
-      
-      if (response.ok) {
-        const scratchpadData = await response.json();
-        
-        let chunk = null;
-        if (Array.isArray(scratchpadData) && scratchpadData.length > 0) {
-          chunk = scratchpadData[0];
-        } else if (scratchpadData && scratchpadData.dweb_type === "PublicScratchpad") {
-          chunk = scratchpadData;
-        }
-        
-        // Prüfe beide möglichen Felder: scratchpad_address oder network_address
-        if (chunk) {
-          const address = chunk.scratchpad_address || chunk.network_address;
-          if (address) {
-            console.log('✅ Found existing friend scratchpad:', address);
-            return address;
-          }
-        }
-      } else if (response.status === 404) {
-        // Create new scratchpad
-        const scratchpadPayload = {
-          counter: 0,
-          data_encoding: 0,
-          dweb_type: "PublicScratchpad",
-          encrypted_data: [0],
-          scratchpad_address: "string",
-          unencrypted_data: [0]
-        };
-        
-        const createResponse = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Ant-App-ID': 'friends'
-          },
-          body: JSON.stringify(scratchpadPayload)
-        });
-        
-        if (!createResponse.ok) {
-          throw new Error(`HTTP ${createResponse.status}: ${createResponse.statusText}`);
-        }
-        
-        const createdScratchpad = await createResponse.json();
-        console.log('📦 Server response for scratchpad creation:', createdScratchpad);
-        
-        // Prüfe beide möglichen Felder: scratchpad_address oder network_address
-        if (createdScratchpad) {
-          const address = createdScratchpad.scratchpad_address || createdScratchpad.network_address;
-          if (address) {
-            console.log('✅ Created new friend scratchpad:', address);
-            return address;
-          }
+      const existing = await service.publicScratchpad.readScratchpad(objectName);
+      if (existing) {
+        const address = existing.scratchpad_address || existing.network_address;
+        if (address) {
+          return address;
         }
       }
-      
-      throw new Error('Failed to create or get friend scratchpad');
+      const peerInfo = {
+        type: 'friend-communication',
+        createdAt: new Date().toISOString(),
+        friendProfileId,
+        myProfileId: profileId
+      };
+      const createdOk = await service.publicScratchpad.create(objectName, peerInfo);
+      if (!createdOk) throw new Error('Failed to create friend scratchpad');
+      const created = await service.publicScratchpad.readScratchpad(objectName);
+      const address = created?.scratchpad_address || created?.network_address || '';
+      if (!address) throw new Error('Missing scratchpad address after creation');
+      return address;
     } catch (error) {
       console.error('❌ Error with friend scratchpad:', error);
       throw error;
@@ -511,7 +471,7 @@
     if (isSessionActive) {
       // initializePeerCommunication entfernt – comm-Scratchpad wird nicht mehr verwendet
       if (accountPackage) {
-        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountPackage.username, accountPackage.privateKeyPem);
+        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName, myPrivateKeyPem);
         const ok = await friendRequestManager.initializeProfile();
         if (ok) {
           profileId = friendRequestManager.getProfileId();
@@ -537,73 +497,34 @@
   
   // Fetch account package from backend
   async function fetchAccountPackage(): Promise<AccountPackage | null> {
-    const url = buildScratchpadUrl();
-    console.log('🌐 Fetching account package from:', url);
-    
+    // Verwende DwebService private scratchpad
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'accept': 'application/json',
-          'Ant-App-ID': 'friends'
+      const service = getDwebService(backendUrl || null, 'friends');
+      // Wenn kein accountName gesetzt ist, wird ohne object_name gelesen (default Scratchpad)
+      const result = await service.privateScratchpad.readScratchpad<AccountPackage>(accountName || '');
+      const accountPkg = result?.data;
+      if (!accountPkg) return null;
+
+      // Migration wie zuvor
+      if (!accountPkg.version || accountPkg.version < 5) {
+        console.log(`🔄 Migrating account package from version ${accountPkg.version || 0} to version 5`);
+        if ((accountPkg as any).version < 4) {
+          (accountPkg as any).friends = [];
+          showNotification('Account package updated. Please add your friends again.');
         }
-      });
-      
-      if (response.status === 404) {
-        console.log('📭 Account package not found (404)');
-        return null;
+        (accountPkg as any).version = 5;
+        await ensureKeyPair(true);
       }
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const scratchpadData = await response.json();
-      
-      // Extract account package from scratchpad format
-      let chunk = null;
-      if (Array.isArray(scratchpadData) && scratchpadData.length > 0) {
-        chunk = scratchpadData[0];
-      } else if (scratchpadData && scratchpadData.dweb_type === "PrivateScratchpad") {
-        chunk = scratchpadData;
-      }
-      
-      if (chunk && chunk.unencrypted_data && Array.isArray(chunk.unencrypted_data)) {
-        try {
-          const accountPackage = byteArrayToJson(chunk.unencrypted_data);
-          console.log('✅ Successfully loaded account package:', accountPackage);
-          
-          // Check version and migrate if needed
-          if (!accountPackage.version || accountPackage.version < 5) {
-            console.log(`🔄 Migrating account package from version ${accountPackage.version || 0} to version 5`);
-            // es gab Änderungen an der Struktur der Freundesliste
-            if (accountPackage.version < 4) {
-              accountPackage.friends = [];
-              showNotification('Account package updated. Please add your friends again.');
-            }
-            accountPackage.version = 5;
-            // Trigger key regeneration
-            await ensureKeyPair(true); // force regeneration
-          }
-          
-          return accountPackage as AccountPackage;
-        } catch (error) {
-          console.error('❌ Error parsing account package:', error);
-          return null;
-        }
-      }
-      
-      return null;
+
+      console.log('✅ Successfully loaded account package via DwebService');
+      return accountPkg as AccountPackage;
     } catch (error) {
       console.error('❌ Error fetching account package:', error);
-      
-      // Check for HTTPS certificate error
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (backendUrl && backendUrl.startsWith('https://') && errorMessage.includes('Failed to fetch')) {
         accountCreationError = `HTTPS certificate error detected. Please click here to accept the self-signed certificate: ${backendUrl}`;
         showAccountCreation = true;
       }
-      
       return null;
     }
   }
@@ -613,32 +534,11 @@
     console.log('💾 Creating account package:', accountData);
     
     try {
-      const accountJson = JSON.stringify(accountData);
-      const accountBytes = jsonToByteArray(accountJson);
-      
-      const scratchpadPayload = {
-        counter: 0,
-        data_encoding: 0,
-        dweb_type: "PrivateScratchpad",
-        encrypted_data: [0],
-        scratchpad_address: "string",
-        unencrypted_data: accountBytes
-      };
-      
-      const response = await fetch(buildScratchpadUrl(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Ant-App-ID': 'friends'
-        },
-        body: JSON.stringify(scratchpadPayload)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      console.log('✅ Account package created successfully');
+      const service = getDwebService(backendUrl || null, 'friends');
+      // Wenn accountName leer ist, erstellen wir das Default-Scratchpad (ohne object_name)
+      const ok = await service.privateScratchpad.create(accountName || '', accountData);
+      if (!ok) throw new Error('create private scratchpad failed');
+      console.log('✅ Account package created successfully (DwebService)');
       return true;
     } catch (error) {
       console.error('❌ Error creating account package:', error);
@@ -659,33 +559,12 @@
     };
     
     try {
-      const accountJson = JSON.stringify(newAccountData);
-      const accountBytes = jsonToByteArray(accountJson);
-      
-      const scratchpadPayload = {
-        counter: 0,
-        data_encoding: 0,
-        dweb_type: "PrivateScratchpad",
-        encrypted_data: [0],
-        scratchpad_address: "string",
-        unencrypted_data: accountBytes
-      };
-      
-      const response = await fetch(buildScratchpadUrl(), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Ant-App-ID': 'friends'
-        },
-        body: JSON.stringify(scratchpadPayload)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
+      const service = getDwebService(backendUrl || null, 'friends');
+      // Wenn accountName leer ist, wird das Default-Scratchpad aktualisiert (ohne object_name)
+      const ok = await service.privateScratchpad.update(accountName || '', newAccountData);
+      if (!ok) throw new Error('update private scratchpad failed');
       accountPackage = newAccountData;
-      console.log('✅ Account package updated successfully');
+      console.log('✅ Account package updated successfully (DwebService)');
       return true;
     } catch (error) {
       console.error('❌ Error updating account package:', error);
@@ -788,7 +667,7 @@
       
       // Initialize Friend Request Manager (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
-        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName || accountData.username, accountData.privateKeyPem);
+        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName, myPrivateKeyPem);
         const ok = await friendRequestManager.initializeProfile();
 
         if (ok) {
@@ -1680,7 +1559,7 @@
         backendUrl,
         profileId, // my profileId
         friend.targetProfileId || '', // their profileId
-        accountPackage?.privateKeyPem,
+        myPrivateKeyPem,
         friendPublicKeyPem
       );
       
@@ -1937,6 +1816,10 @@
   // Start checking for friend requests
   function startFriendRequestCheck() {
     if (!friendRequestManager) return;
+    if (friendRequestCheckInterval) {
+      clearInterval(friendRequestCheckInterval);
+      friendRequestCheckInterval = null;
+    }
     
     // Check immediately
     checkFriendRequests();
@@ -1948,6 +1831,13 @@
   // Check for friend requests periodically
   async function checkFriendRequests() {
     if (!friendRequestManager) return;
+    // Stelle sicher, dass der deterministische Private Key bereit ist
+    if (!myPrivateKeyPem) {
+      console.log('🔑 Private key not ready, deriving before checking friend requests...');
+      await ensureKeyPair();
+    }
+    if ((checkFriendRequests as any)._running) return;
+    (checkFriendRequests as any)._running = true;
     
     try {
       const requests = await friendRequestManager.checkPendingRequests();
@@ -2131,6 +2021,8 @@
       }
     } catch (error) {
       console.error('Error checking friend requests:', error);
+    } finally {
+      (checkFriendRequests as any)._running = false;
     }
   }
 
@@ -2139,7 +2031,7 @@
     if (!friendRequestManager || !req) return;
     try {
       await friendRequestManager.removeProcessedRequest(req.profileId);
-      pendingFriendRequests = pendingFriendRequests.filter(r => !(r.profileId === req.profileId && r.time === req.time));
+      pendingFriendRequests = pendingFriendRequests.filter((r: FriendRequest) => !(r.profileId === req.profileId && r.time === req.time));
       showNotification('Friend request declined');
     } catch (error) {
       console.error('Error declining friend request:', error);
@@ -2153,7 +2045,7 @@
   function handleRenameFriend(event: CustomEvent<{newName: string}>) {
     const { newName } = event.detail;
     if (!selectedFriend) return;
-    const friendIndex = friends.findIndex(f => f === selectedFriend);
+    const friendIndex = friends.findIndex((f: Friend) => f === selectedFriend);
     if (friendIndex !== -1) {
       friends[friendIndex] = { ...friends[friendIndex], displayName: newName };
       friends = [...friends];
@@ -2196,7 +2088,6 @@
   let publicIdentifiers: string[] = [];
   let showAddPublicIdentifier = false;
   let newPublicIdentifier = '';
-  const ANT_OWNER_SECRET = '6e273a3c19d3e908e905dc6537b7cfb9010ca7650a605886029850cef60cd440';
   // Lader-Status für Public-Identifier-Erstellung im Wizard
   let publicIdentifierLoading = false;
 
@@ -2220,73 +2111,35 @@
       return;
     }
 
-    const url = buildPointerUrl(identifier);
-    // Build payload string manually to keep huge counter numeric (avoids JS precision loss)
-    const payload = `{
-      "pointer_address": "",
-      "counter": 18446744073709551615,
-      "chunk_target_address": "",
-      "graphentry_target_address": "",
-      "pointer_target_address": "",
-      "scratchpad_target_address": "${profileId}"
-    }`;
-
+    const service = new DwebService(backendUrl || null, 'friends', FRIENDS_SHARED_GLOBAL_SECRET);
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          accept: 'application/json',
-          'Content-Type': 'application/json',
-          'Ant-App-ID': 'friends',
-          'Ant-Owner-Secret': ANT_OWNER_SECRET
-        },
-        body: payload
-      });
+      const existing = await service.pointer.readPointer(identifier);
+      if (existing) {
+        const addr = existing.chunk_target_address || existing.pointer_target_address || existing.scratchpad_target_address || '';
+        if (addr === profileId) {
+          publicIdentifiers = [...new Set([...publicIdentifiers, identifier])];
+          if (accountPackage) {
+            await updateAccountPackage({ ...accountPackage, publicIdentifiers });
+          }
+          showNotification(currentTranslations.publicIdentifierAdded);
+          showAddPublicIdentifier = false;
+          newPublicIdentifier = '';
+          return;
+        } else {
+          showNotification(currentTranslations.publicNameTaken);
+          return;
+        }
+      }
 
-      if (res.ok && res.status === 201) {
+      const ok = await service.pointer.createPointer(identifier, profileId);
+      if (ok) {
         publicIdentifiers = [...new Set([...publicIdentifiers, identifier])];
-        // persist
         if (accountPackage) {
           await updateAccountPackage({ ...accountPackage, publicIdentifiers });
         }
         showNotification(currentTranslations.publicIdentifierAdded);
         showAddPublicIdentifier = false;
         newPublicIdentifier = '';
-      } else if (res.status === 502) {
-        const text = await res.text();
-        if (text.includes('Pointer already exists')) {
-          // Fetch existing pointer to verify owner
-          try {
-            const ptrRes = await fetch(url, {
-              headers: {
-                accept: 'application/json',
-                'Ant-App-ID': 'friends',
-                'Ant-Owner-Secret': ANT_OWNER_SECRET
-              }
-            });
-            if (ptrRes.ok) {
-              const data = await ptrRes.json();
-              const obj = Array.isArray(data) && data.length > 0 ? data[0] : data;
-              const addr = obj?.chunk_target_address || obj?.pointer_target_address || obj?.scratchpad_target_address || '';
-              if (addr === profileId) {
-                // belongs to us – treat as success
-                publicIdentifiers = [...new Set([...publicIdentifiers, identifier])];
-                if (accountPackage) {
-                  await updateAccountPackage({ ...accountPackage, publicIdentifiers });
-                }
-                showNotification(currentTranslations.publicIdentifierAdded);
-                showAddPublicIdentifier = false;
-                newPublicIdentifier = '';
-                return;
-              }
-            }
-          } catch (e) {
-            console.error('Error verifying existing pointer', e);
-          }
-          showNotification(currentTranslations.publicNameTaken);
-        } else {
-          showNotification(currentTranslations.connectionError);
-        }
       } else {
         showNotification(currentTranslations.connectionError);
       }
@@ -2325,23 +2178,14 @@
 
       // FriendRequestManager initialisieren (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
-        friendRequestManager = new FriendRequestManager(backendUrl, '', displayNameToUse, accountPackage.privateKeyPem);
+        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName, myPrivateKeyPem);
         const ok = await friendRequestManager.initializeProfile();
 
         if (ok) {
           profileId = friendRequestManager.getProfileId();
         }
 
-        // Sicherstellen, dass der Display-Name im Profil korrekt gesetzt ist
-        if (profileId) {
-          const profile = await friendRequestManager.readProfile(profileId!);
-          if (profile) {
-            profile.accountname = displayNameToUse;
-            delete (profile as any).accountName; // Altes Feld entfernen
-            await friendRequestManager.writeProfile(profile);
-            console.log('✅ Display-Name im Profil gesetzt:', displayNameToUse);
-          }
-        }
+        // Hinweis: Accountname im Profil erst setzen, wenn der Nutzer einen echten Namen gewählt hat
 
         // Update profile image if available
         if (accountPackage.profileImage) {
@@ -2366,13 +2210,47 @@
       // Optimistische Aktualisierung, damit der Name sofort in der UI erscheint
       accountPackage = { ...accountPackage, username: name };
       const success = await updateAccountPackage({ ...accountPackage, username: name });
-      if (success && friendRequestManager && profileId) {
-        const profile = await friendRequestManager.readProfile(profileId!);
+      if (success && friendRequestManager) {
+        const profile = await friendRequestManager.readMyProfile();
         if (profile) {
           profile.accountname = name;
           delete (profile as any).accountName;
           await friendRequestManager.writeProfile(profile);
         }
+      }
+    } else {
+      // Falls der Nutzer zuerst den Namen setzt, bevor das Package existiert:
+      const accountData: AccountPackage = {
+        version: 3,
+        username: name,
+        themeUrl: 'default',
+        language,
+        friends: [],
+        activeSession: {
+          sessionId: currentSessionId,
+          timestamp: sessionStartTimestamp
+        }
+      };
+      const created = await createAccountPackage(accountData);
+      if (created) {
+        accountPackage = accountData;
+        startSessionMonitoring();
+        friendRequestManager = new FriendRequestManager(backendUrl, '', accountName, myPrivateKeyPem);
+        const ok = await friendRequestManager.initializeProfile();
+        if (ok) {
+          profileId = friendRequestManager.getProfileId();
+        }
+        try {
+            const p = await friendRequestManager.readMyProfile();
+            if (p) {
+              p.accountname = name;
+              delete (p as any).accountName;
+              await friendRequestManager.writeProfile(p);
+            }
+          } catch {}
+        await ensureKeyPair();
+        await ensureFriendRequestLink();
+        startFriendRequestCheck();
       }
     }
   }
@@ -2403,12 +2281,15 @@
       friendRequestManager.initializeProfile().then(async () => {
         // Sicherstellen, dass der Display-Name im Profil korrekt gesetzt ist
         if (accountPackage && profileId) {
-          const profile = await friendRequestManager?.readProfile(profileId!);
-          if (profile && profile.accountname !== accountPackage.username) {
-            console.log('🔄 Aktualisiere Display-Name im Profil:', accountPackage.username);
-            profile.accountname = accountPackage.username;
-            delete (profile as any).accountName; // Altes Feld entfernen
-            await friendRequestManager?.writeProfile(profile);
+          // Nur aktualisieren, wenn der Name nicht der Platzhalter 'User' ist
+          if (accountPackage.username && accountPackage.username !== 'User') {
+            const profile = await friendRequestManager?.readProfile(profileId!);
+            if (profile && profile.accountname !== accountPackage.username) {
+              console.log('🔄 Aktualisiere Display-Name im Profil:', accountPackage.username);
+              profile.accountname = accountPackage.username;
+              delete (profile as any).accountName; // Altes Feld entfernen
+              await friendRequestManager?.writeProfile(profile);
+            }
           }
         }
       });
@@ -2434,7 +2315,7 @@
     if (!accountPackage || !name || name === accountPackage.username) return;
     const success = await updateAccountPackage({ ...accountPackage, username: name });
     if (success && friendRequestManager && profileId) {
-      const profile = await friendRequestManager.readProfile(profileId!);
+      const profile = await friendRequestManager.readMyProfile();
       if (profile) {
         profile.accountname = name;
         delete (profile as any).accountName;
@@ -2482,7 +2363,7 @@
 
   // Stelle sicher, dass ein RSA-Schlüsselpaar existiert und PublicKey im Profil gespeichert ist
   async function ensureKeyPair(force: boolean = false) {
-    if (!accountPackage || !friendRequestManager || !profileId) return;
+    if (!accountPackage || !friendRequestManager) return;
 
     // Hilfsfunktionen
     function bufferToPem(buffer: ArrayBuffer, label: string): string {
@@ -2492,58 +2373,67 @@
       return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----`;
     }
 
-    let shouldGenerate = false;
-    if (force || !accountPackage.privateKeyPem) {
-      shouldGenerate = true;
-    } else {
-      // Prüfen, ob im Profil bereits ein PublicKey liegt
-      try {
-        const prof = await friendRequestManager.readProfile(profileId!);
-        if (!prof || !prof.publicKeyPem) {
-          shouldGenerate = true;
-        }
-      } catch (_) {
-        shouldGenerate = true;
-      }
-    }
-
-    if (!shouldGenerate) return; // alles vorhanden
-
-    console.log('🔑 Generiere neues RSA-Schlüsselpaar');
-    const keyPair = await crypto.subtle.generateKey(
-      {
-        name: 'RSA-OAEP',
-        modulusLength: 2048,
-        publicExponent: new Uint8Array([1, 0, 1]),
-        hash: 'SHA-256'
-      },
-      true,
-      ['encrypt', 'decrypt']
-    );
-
-    const privBuf = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
-    const pubBuf  = await crypto.subtle.exportKey('spki',  keyPair.publicKey);
-    const privPem = bufferToPem(privBuf, 'PRIVATE KEY');
-    const pubPem  = bufferToPem(pubBuf,  'PUBLIC KEY');
-
-    // Account-Package aktualisieren
-    const okPackage = await updateAccountPackage({ privateKeyPem: privPem });
-    if (okPackage) {
-      accountPackage = { ...accountPackage, privateKeyPem: privPem };
-      console.log('✅ PrivateKey im Account-Package gespeichert');
-      friendRequestManager?.setPrivateKeyPem?.(privPem);
-    }
-
-    // Profil aktualisieren
+    // 1) Private Scratchpad-Adresse holen (Account-Package liegt dort)
     try {
-      const prof = await friendRequestManager.readProfile(profileId!);
-      if (prof) {
-        prof.publicKeyPem = pubPem;
-        await friendRequestManager.writeProfile(prof);
-        console.log('✅ PublicKey im Profil-Scratchpad gespeichert');
+      const service = getDwebService(backendUrl || null, 'friends');
+      let address = '';
+      if (accountName) {
+        // Mit object_name arbeiten
+        service.privateScratchpad.setObjectName(accountName);
+        await service.privateScratchpad.readCurrent<AccountPackage>();
+        address = service.privateScratchpad.getAddress();
+      } else {
+        // Default-Private-Scratchpad (ohne object_name)
+        const res = await service.privateScratchpad.readScratchpad<AccountPackage>('');
+        address = (res?.scratchpad_address || (res as any)?.network_address || '');
+      }
+      if (!address) {
+        console.warn('⚠️ Keine private Scratchpad-Adresse verfügbar');
+        return;
+      }
+
+      // 2) Deterministischen RSA-Key aus Adresse ableiten
+      const { privateKeyPem, publicKeyPem } = await deriveDeterministicRsaFromScratchpadAddress(address);
+      myPrivateKeyPem = privateKeyPem;
+      friendRequestManager?.setPrivateKeyPem?.(privateKeyPem);
+
+      // 3) Falls im Account-Package noch ein privateKeyPem liegt, entfernen und speichern
+      if (accountPackage.privateKeyPem) {
+        const cleaned: Partial<AccountPackage> = { ...accountPackage };
+        delete (cleaned as any).privateKeyPem;
+        const ok = await updateAccountPackage({ ...cleaned, privateKeyPem: undefined });
+        if (ok) {
+          accountPackage = { ...(accountPackage as AccountPackage) };
+          delete (accountPackage as any).privateKeyPem;
+          console.log('🧹 PrivateKey aus Account-Package entfernt');
+        }
+      }
+
+      // 4) Public Key im Profil prüfen/korrigieren
+      if (!profileId) {
+        // Profil-ID kann hier nach initializeProfile erst gesetzt werden; wir versuchen zu lesen, wenn vorhanden
+        try {
+          const ok = await friendRequestManager.initializeProfile();
+          if (ok) {
+            profileId = friendRequestManager.getProfileId();
+          }
+        } catch (_) { /* ignore */ }
+      }
+
+      try {
+        const prof = await friendRequestManager.readMyProfile();
+        if (prof) {
+          if (prof.publicKeyPem !== publicKeyPem) {
+            prof.publicKeyPem = publicKeyPem;
+            await friendRequestManager.writeProfile(prof);
+            console.log('✅ PublicKey im Profil-Scratchpad aktualisiert');
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Konnte eigenes Profil nicht lesen/aktualisieren', e);
       }
     } catch (e) {
-      console.warn('⚠️ Konnte PublicKey nicht im Profil speichern', e);
+      console.error('❌ ensureKeyPair failed', e);
     }
   }
 </script>
@@ -2583,7 +2473,7 @@
       language={language}
       on:openSettings={() => showSettingsModal = true}
     />
-    <div class="header-buttons">
+    <div class="header-buttons" aria-label="header actions">
       <FriendRequestNotification
         pendingRequests={pendingFriendRequests.length}
         language={language}
@@ -2987,13 +2877,19 @@
   
   .header-container {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     border-bottom: 1px solid var(--line-color);
   }
   
   .header-buttons {
-    padding-right: 1rem;
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    padding: 0 0.75rem;
     background: var(--foreground-color1);
+    height: 100%;
+    min-height: 48px;
+    border-bottom: 1px solid var(--line-color);
   }
 
   .public-identifiers {

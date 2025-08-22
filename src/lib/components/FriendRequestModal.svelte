@@ -2,12 +2,13 @@
   import { createEventDispatcher } from 'svelte';
   import { translations } from '../../i18n/translations';
   import type { ProfileData } from '../webrtc/FriendRequestManager';
+  import { FRIENDS_SHARED_GLOBAL_SECRET } from '../webrtc/FriendRequestManager';
   
   export let language: 'en' | 'de' | 'fr' | 'es' | 'bg' | 'ja' | 'ko' | 'zh' = 'en';
   export let friendRequestManager: any;
   
   const dispatch = createEventDispatcher();
-  const t = translations[language];
+  const t = translations[language] as Record<string, string>;
   
   let profileId = '';
   // Stores resolved profile ID (96-char address) after lookup; may differ from user input
@@ -17,38 +18,17 @@
   let loading = false;
   let error = '';
 
-  // Constant for pointer requests – same as used elsewhere
-  const ANT_OWNER_SECRET = '6e273a3c19d3e908e905dc6537b7cfb9010ca7650a605886029850cef60cd440';
-
-  // Helper to build pointer URL
-  function buildPointerUrl(objectName: string): string {
-    const base = friendRequestManager?.backendUrl ? `${friendRequestManager.backendUrl}/dweb-0/pointer` : '/dweb-0/pointer';
-    return `${base}?object_name=${encodeURIComponent(objectName)}`;
-  }
+  // Constant for pointer requests – using imported constant
 
   async function resolvePublicIdentifier(identifier: string): Promise<string | null> {
     try {
-      const url = buildPointerUrl(identifier);
-      const res = await fetch(url, {
-        headers: {
-          accept: 'application/json',
-          'Ant-App-ID': 'friends',
-          'Ant-Owner-Secret': ANT_OWNER_SECRET
-        }
-      });
-
-      if (!res.ok) {
-        return null;
-      }
-
-      const data = await res.json();
-      // If server wraps in array, unwrap
-      const obj = Array.isArray(data) && data.length > 0 ? data[0] : data;
-      const pid = obj?.chunk_target_address || obj?.pointer_target_address || obj?.scratchpad_target_address || '';
-      if (pid.length === 96) {
-        return pid;
-      }
-      return null;
+      // DwebService mit Secret explizit instanziieren (Singleton vermeiden, sonst fehlt Secret)
+      const { DwebService } = await import('../utils/dweb/DwebService');
+      const service = new DwebService(friendRequestManager?.backendUrl || null, 'friends', FRIENDS_SHARED_GLOBAL_SECRET);
+      const ptr = await service.pointer.readPointer(identifier);
+      if (!ptr) return null;
+      const pid = ptr.chunk_target_address || ptr.pointer_target_address || ptr.scratchpad_target_address || '';
+      return pid && pid.length === 96 ? pid : null;
     } catch (e) {
       console.error('Error resolving public identifier', e);
       return null;
@@ -58,23 +38,20 @@
   // Derive backendUrl from manager if available
   $: backendUrl = friendRequestManager?.backendUrl || '';
   
+  import { buildDataUrl } from '../utils/imageUrl';
   // Compute full profile image URL
   $: profileImageUrl = profileData && profileData.profileImage
-    ? (profileData.profileImage.startsWith('http')
-        ? profileData.profileImage
-        : backendUrl
-          ? `${backendUrl}/dweb-0/data/${profileData.profileImage}`
-          : `/dweb-0/data/${profileData.profileImage}`)
+    ? buildDataUrl(profileData.profileImage, backendUrl)
     : '';
   
   async function loadProfile() {
-    if (!profileId.trim()) {
+    if (!((profileId || '').trim())) {
       error = t.enterProfileId;
       return;
     }
     
     // Determine whether input is profileId or public identifier
-    const inputVal = profileId.trim();
+    const inputVal = (profileId || '').trim();
     if (inputVal.length !== 96) {
       loading = true;
       error = '';
@@ -111,7 +88,7 @@
   }
   
   async function sendFriendRequest() {
-    if (!profileData || !displayName.trim()) {
+    if (!profileData || !((displayName || '').trim())) {
       error = t.enterDisplayName;
       return;
     }
@@ -164,7 +141,7 @@
         />
         <button 
           on:click={loadProfile} 
-          disabled={loading || !profileId.trim()}
+          disabled={loading || !((profileId || '').trim())}
           class="load-button"
         >
           {loading ? t.loading : t.loadProfile}
@@ -192,7 +169,7 @@
             </div>
           {/if}
           <div class="profile-details">
-            <p class="account-name">{profileData.accountname}</p>
+            <p class="account-name">{((displayName || '').trim()) ? displayName : (profileData.accountname || (profileData as any)?.accountName || '')}</p>
             {#if resolvedProfileId}
               <p class="profile-id-display">{resolvedProfileId}</p>
             {/if}
@@ -216,7 +193,7 @@
           </button>
           <button 
             on:click={sendFriendRequest} 
-            disabled={loading || !displayName.trim()}
+            disabled={loading || !((displayName || '').trim())}
             class="primary-button"
           >
             {loading ? t.sending : t.sendFriendRequest}

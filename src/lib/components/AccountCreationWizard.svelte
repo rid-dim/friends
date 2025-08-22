@@ -23,7 +23,7 @@
   export let publicIdentifiers: string[] = []; // Wird von App.svelte gereicht
   export let backendUrl: string;
 
-  $: t = translations[language];
+  $: t = translations[language] as Record<string, string>;
 
   function start() {
     dispatch('start');
