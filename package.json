@@ -22,7 +22,7 @@
 		"vite": "^6.0.0"
 	},
 	"dependencies": {
-		"smokesigns": "file:../smokesigns",
-		"node-forge": "^1.3.1"
+		"node-forge": "^1.3.1",
+		"smokesigns": "file:../smokesigns"
 	}
 }

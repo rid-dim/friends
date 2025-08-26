@@ -112,35 +112,109 @@ export abstract class Mutable {
 
   /**
    * Write data to the API (using POST for create, PUT for update)
-   * 
+   *
    * @param objectName - The object name to write to
    * @param data - The data to write
    * @param forcePost - Force using POST even if the object exists
    */
   public async write<T = any>(objectName: string, data: any, forcePost: boolean = false): Promise<boolean> {
-    const exists = !forcePost && await this.exists(objectName);
-    const method = exists ? 'PUT' : 'POST';
+    // Strategie:
+    // - Wenn forcePost: immer POST
+    // - Wenn objectName vorhanden: exists()-Check beibehalten
+    // - Wenn objectName leer (Default-Scratchpad): standardmäßig PUT versuchen (idempotent)
+    //   und bei 404 einmalig auf POST zurückfallen.
+
     const url = this.buildUrl(objectName);
-    
+    let method: 'PUT' | 'POST';
+    if (forcePost) {
+      method = 'POST';
+    } else if (objectName) {
+      const exists = await this.exists(objectName);
+      method = exists ? 'PUT' : 'POST';
+    } else {
+      // Default-Scratchpad ohne object_name → bevorzugt PUT (idempotent)
+      method = 'PUT';
+    }
+
     // Das Ant-Owner-Secret wird nur gesendet, wenn es beim Initialisieren der Klasse gesetzt wurde
     // Dies erlaubt eine präzise Kontrolle darüber, wann das Secret gesendet wird
     // Bei Public Identifiers und Freundschaftsanfragen wird es benötigt
     try {
-      const response = await fetch(url, {
-        method,
-        headers: this.getHeaders(!!this.antOwnerSecret), // Sende Secret nur wenn es existiert
-        body: JSON.stringify(data)
-      });
-      
+      const attempt = async (m: 'PUT' | 'POST') => {
+        const resp = await fetch(url, {
+          method: m,
+          headers: this.getHeaders(!!this.antOwnerSecret),
+          body: JSON.stringify(data)
+        });
+        return resp;
+      };
+
+      let response = await attempt(method);
+
+      // Fallback: Wenn wir beim Default-Scratchpad mit PUT auf 404 laufen, einmalig POST versuchen
+      if (!response.ok && !objectName && method === 'PUT' && response.status === 404) {
+        response = await attempt('POST');
+      }
+
       if (response.ok) {
         return true;
-      } else {
-        console.warn(`Failed to write to ${this.constructor.name}:`, await response.text());
-        return false;
       }
+
+      console.warn(`Failed to write to ${this.constructor.name}:`, await response.text());
+      return false;
     } catch (error) {
       console.error(`Error writing to ${this.constructor.name}:`, error);
       return false;
+    }
+  }
+
+  /**
+   * Write data to the API with detailed error information
+   *
+   * @param objectName - The object name to write to
+   * @param data - The data to write
+   * @param forcePost - Force using POST even if the object exists
+   * @returns Object with success status and error details if applicable
+   */
+  public async writeWithErrorDetails<T = any>(objectName: string, data: any, forcePost: boolean = false): Promise<{ success: boolean; error?: { status: number; message: string; isPaymentFailure: boolean } }> {
+    const exists = !forcePost && await this.exists(objectName);
+    const method = exists ? 'PUT' : 'POST';
+    const url = this.buildUrl(objectName);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: this.getHeaders(!!this.antOwnerSecret),
+        body: JSON.stringify(data)
+      });
+
+      if (response.ok) {
+        return { success: true };
+      } else {
+        const responseText = await response.text();
+        const isPaymentFailure = response.status === 502 && responseText.includes('Payment failure occurred');
+
+        console.warn(`Failed to write to ${this.constructor.name}:`, responseText);
+
+        return {
+          success: false,
+          error: {
+            status: response.status,
+            message: responseText,
+            isPaymentFailure
+          }
+        };
+      }
+    } catch (error) {
+      console.error(`Error writing to ${this.constructor.name}:`, error);
+      return {
+        success: false,
+        error: {
+          status: 0,
+          message: error instanceof Error ? error.message : 'Unknown error',
+          isPaymentFailure: false
+        }
+      };
     }
   }
 

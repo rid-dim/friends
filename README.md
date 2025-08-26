@@ -2,6 +2,68 @@
 
 A unique completely decentralized messenger that doesn't use any centralised servers to establish a direct p2p communication between friends.
 
+## Installation & Start
+
+To start the P2P chat application, you first need to install the `dweb` command line tool (after installing rustup if you don't have that; description and link in the troubleshooting section immediately after this section):
+
+```bash
+cargo install --locked dweb-cli
+```
+
+and then you need to make sure to include a private key holding some Eth(Arb) and ANT in your environment variables to enable dweb to pay for the needed Account Setup (one digit USD worth of Eth and 1 ANT are enough for everything needed as of now)
+
+easiest is to include this export in your ~/.bashrc (or other terminal init file)
+> export SECRET_KEY=0x1111111111111111111111111111111111111111111111111111111111111111
+
+After installation, you can start the dweb server with:
+(blocks one terminal session)
+
+```bash
+dweb serve
+```
+
+and then you can open friends from a 2nd terminal with
+
+```bash
+dweb open friends
+```
+
+For more detailed instructions regarding dweb, please visit the [dweb repository](https://codeberg.org/happybeing/dweb).
+
+### chatting with yourself
+
+the current version of dweb should open at port 38617 and therefore to open an 2nd account and to test-chat with yourself you can open:
+
+http://localhost:38617/?accountname=secondAccount
+
+the query param accountname is used to derive a derived account - you can ofc use every key here and it has nothing to do with your username in friends ... it's just a way to get to a derived account
+
+http://localhost:38617/?accountname=thisismetoo
+
+## Troubleshooting
+
+I recommend installing dweb via cargo after installing [rustup](https://www.rust-lang.org/learn/get-started) (the rust development environment)
+
+e.g. on Linux/MacOS:
+
+`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+
+(after that you need to close and open the terminal again)
+
+then the
+
+```bash
+cargo install --locked dweb-cli
+```
+
+### Error scenarios
+
+in case you see errors with the dweb install you may need to:
+
+```bash
+sudo apt-get update && sudo apt-get install libssl-dev pkg-config
+```
+
 ## Features
 
 The Friends Chat Application enables direct peer-to-peer communication between users via WebRTC with advanced cryptographic security.
@@ -37,33 +99,6 @@ The Friends Messenger ensures secure communication through multiple layers of en
 - **Perfect Forward Secrecy**: Each WebRTC session establishes new encryption keys, ensuring past communications remain secure even if keys are compromised
 - **No Data Persistence**: Messages are not stored on any server - they exist only during the active peer-to-peer session
 
-## Installation & Start
-
-To start the P2P chat application, you first need to install the `dweb` command line tool (after installing rustup if you don't have that; description and link in the troubleshooting section at the bottom):
-
-```bash
-cargo install --locked dweb-cli
-```
-
-and then you need to make sure to include a private key holding some Eth(Arb) and ANT in your environment variables to enable dweb to pay for the needed Account Setup (one digit USD worth of Eth and 1 ANT are enough for everything needed as of now)
-
-easiest is to include this export in your ~/.bashrc (or other terminal init file)
-> export SECRET_KEY=0x1111111111111111111111111111111111111111111111111111111111111111
-
-After installation, you can start the dweb server with:
-(blocks one terminal session)
-
-```bash
-dweb serve
-```
-
-and then you can open friends from a 2nd terminal with
-
-```bash
-dweb open friends
-```
-
-For more detailed instructions regarding dweb, please visit the [dweb repository](https://codeberg.org/happybeing/dweb).
 
 ## Technical Details:
 
@@ -271,30 +306,6 @@ graph TB
 - **Orange (Friend Request Scratchpads)**: RSA-encrypted friend requests and approvals
 - **Purple (Communication Scratchpads)**: RSA-encrypted WebRTC handshake data
 - **Direct P2P**: End-to-end encrypted via WebRTC's DTLS/SRTP protocols
-
-## Troubleshooting
-
-I recommend installing dweb via cargo after installing [rustup](https://www.rust-lang.org/learn/get-started) (the rust development environment)
-
-e.g. on Linux/MacOS:
-
-`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-
-(after that you need to close and open the terminal again)
-
-then the
-
-```bash
-cargo install --locked dweb-cli
-```
-
-### Error scenarios
-
-in case you see errors with the dweb install you may need to:
-
-```bash
-sudo apt-get update && sudo apt-get install libssl-dev pkg-config
-```
 
 ## Local Development
 

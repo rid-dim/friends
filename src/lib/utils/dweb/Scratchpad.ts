@@ -163,7 +163,7 @@ export class Scratchpad extends Mutable {
 
   /**
    * Create a new scratchpad with initial data
-   * 
+   *
    * @param objectName - Name of the scratchpad to create
    * @param data - Initial data to store
    * @param additionalProps - Additional properties to include in the scratchpad
@@ -171,7 +171,7 @@ export class Scratchpad extends Mutable {
   public async create(objectName: string, data: any, additionalProps: Record<string, any> = {}): Promise<boolean> {
     // Convert data to byte array if it's an object
     const dataBytes = typeof data === 'object' ? this.jsonToByteArray(JSON.stringify(data)) : data;
-    
+
     // Create standard scratchpad payload with all required fields
     const payload = {
       counter: 1,
@@ -182,8 +182,34 @@ export class Scratchpad extends Mutable {
       unencrypted_data: Array.isArray(dataBytes) ? dataBytes : [0],
       ...additionalProps
     };
-    
+
     return this.write(objectName, payload, true);
+  }
+
+  /**
+   * Create a new scratchpad with initial data and detailed error information
+   *
+   * @param objectName - Name of the scratchpad to create
+   * @param data - Initial data to store
+   * @param additionalProps - Additional properties to include in the scratchpad
+   * @returns Object with success status and error details if applicable
+   */
+  public async createWithErrorDetails(objectName: string, data: any, additionalProps: Record<string, any> = {}): Promise<{ success: boolean; error?: { status: number; message: string; isPaymentFailure: boolean } }> {
+    // Convert data to byte array if it's an object
+    const dataBytes = typeof data === 'object' ? this.jsonToByteArray(JSON.stringify(data)) : data;
+
+    // Create standard scratchpad payload with all required fields
+    const payload = {
+      counter: 1,
+      data_encoding: 0,
+      dweb_type: this.type === ScratchpadType.PRIVATE ? "PrivateScratchpad" : "PublicScratchpad",
+      encrypted_data: [0],
+      scratchpad_address: "string",
+      unencrypted_data: Array.isArray(dataBytes) ? dataBytes : [0],
+      ...additionalProps
+    };
+
+    return this.writeWithErrorDetails(objectName, payload, true);
   }
 
   /**

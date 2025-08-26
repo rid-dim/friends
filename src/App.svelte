@@ -13,6 +13,7 @@
   import ProfileModal from './lib/components/ProfileModal.svelte';
   import AccountCreationWizard from './lib/components/AccountCreationWizard.svelte';
   import SettingsModal from './lib/components/SettingsModal.svelte';
+  import PaymentFailureModal from './lib/components/PaymentFailureModal.svelte';
   
   // Import WebRTC and file handling
   import { ConnectionManager } from './lib/webrtc/ConnectionManager';
@@ -33,6 +34,9 @@
   import { DwebService } from './lib/utils/dweb/DwebService';
   import { FRIENDS_SHARED_GLOBAL_SECRET } from './lib/webrtc/FriendRequestManager';
   import { deriveDeterministicRsaFromScratchpadAddress } from './lib/utils/crypto/deterministicRsa';
+  
+  // Zentrale Versionskonstante für das Account-Package
+  const ACCOUNT_PACKAGE_VERSION = 6;
   // Backend and account package related types
   interface AccountPackage {
     version: number; // Version of the account package format
@@ -117,6 +121,9 @@
   let myPrivateKeyPem: string | undefined = undefined;
   let showFriendRequestModal = false;
   let showProfileModal = false;
+  let showPaymentFailureModal = false;
+  // Migration v6 Hinweis-Dialog
+  let showMigrationNotice = false;
   let pendingFriendRequests: FriendRequest[] = [];
   let selectedFriendRequest: FriendRequest | null = null;
   let selectedProfileData: ProfileData | null = null;
@@ -304,27 +311,27 @@
   }
   
   // Initialize session management
-  async function initializeSession() {
+  function initializeSession() {
     if (!accountPackage) return;
-    
+
     // Generate new session ID
     currentSessionId = generateSessionId();
     sessionStartTimestamp = Date.now();
-    
+
     console.log('🔐 Initializing session:', currentSessionId, 'at timestamp:', sessionStartTimestamp);
-    
-    // The new instance takes over - update account package with new session
+
+    // The new instance takes over - update account package with new session (async)
     // This will cause the old instance to detect the change and shut down
-    await updateAccountPackage({
+    updateAccountPackageAsync({
       activeSession: {
         sessionId: currentSessionId,
         timestamp: sessionStartTimestamp
       }
     });
-    
+
     console.log('🔐 Session initialized and registered');
-    
-    // Start session monitoring
+
+    // Start session monitoring immediately (don't wait for the async update)
     startSessionMonitoring();
   }
   
@@ -419,10 +426,10 @@
             }
           }
 
-          // Wenn wir Einträge entfernt haben, Account-Pakete sofort aktualisieren
+          // Wenn wir Einträge entfernt haben, Account-Pakete im Hintergrund aktualisieren
           if (dedupedFriendsData.length !== fetchedPackage.friends.length) {
             console.log('🧹 Duplicate friends removed from account package:', fetchedPackage.friends.length - dedupedFriendsData.length);
-            await updateAccountPackage({ friends: dedupedFriendsData });
+            updateAccountPackageAsync({ friends: dedupedFriendsData });
           }
 
           friends = dedupedFriendsData.map(f => ({
@@ -453,9 +460,9 @@
         }
         
         showNotification(`Welcome back, ${fetchedPackage.username}!`);
-        
-        // Initialize session management
-        await initializeSession();
+
+        // Initialize session management (now async in background)
+        initializeSession();
       } else {
         // No account package found - offer to create one
         showAccountCreation = true;
@@ -472,9 +479,16 @@
       // initializePeerCommunication entfernt – comm-Scratchpad wird nicht mehr verwendet
       if (accountPackage) {
         friendRequestManager = new FriendRequestManager(backendUrl, '', accountName, myPrivateKeyPem);
-        const ok = await friendRequestManager.initializeProfile();
-        if (ok) {
+        const result = await friendRequestManager.initializeProfileWithErrorDetails();
+        if (result.success) {
           profileId = friendRequestManager.getProfileId();
+        } else {
+          // Check if it's a payment failure error
+          if (result.error?.isPaymentFailure) {
+            showPaymentFailureModal = true;
+          } else {
+            showNotification(currentTranslations.connectionError);
+          }
         }
         if (accountPackage.profileImage) {
           await friendRequestManager.updateProfileImage(accountPackage.profileImage);
@@ -505,14 +519,41 @@
       const accountPkg = result?.data;
       if (!accountPkg) return null;
 
-      // Migration wie zuvor
-      if (!accountPkg.version || accountPkg.version < 5) {
-        console.log(`🔄 Migrating account package from version ${accountPkg.version || 0} to version 5`);
-        if ((accountPkg as any).version < 4) {
+      // Migration wie zuvor (gegen die zentrale Versionskonstante)
+      if (!accountPkg.version || accountPkg.version < ACCOUNT_PACKAGE_VERSION) {
+        console.log(`🔄 Migrating account package from version ${accountPkg.version || 0} to version ${ACCOUNT_PACKAGE_VERSION}`);
+
+        // Ab v6: Freunde leeren und alle Public Identifiers entfernen
+        if ((accountPkg as any).version < 6) {
+          // 1) Freunde im Account-Package zurücksetzen
           (accountPkg as any).friends = [];
-          showNotification('Account package updated. Please add your friends again.');
+          // 2) Public Identifiers lokal und im Account-Package zurücksetzen
+          try {
+            if (Array.isArray((accountPkg as any).publicIdentifiers)) {
+              const ids: string[] = [...(accountPkg as any).publicIdentifiers];
+              if (ids.length > 0) {
+                // Versuche, alle zugehörigen Pointer zu löschen
+                const service = new DwebService(backendUrl || null, 'friends', FRIENDS_SHARED_GLOBAL_SECRET);
+                for (const id of ids) {
+                  try {
+                    await service.pointer.delete(id);
+                  } catch (e) {
+                    console.warn('⚠️ Konnte Pointer nicht löschen:', id, e);
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('⚠️ Fehler beim Entfernen der Public Identifiers während Migration', e);
+          }
+          (accountPkg as any).publicIdentifiers = [];
+
+          // Übersetzter Hinweis + Dialog
+          showNotification(currentTranslations.migrationNoticeTitle);
+          showMigrationNotice = true;
         }
-        (accountPkg as any).version = 5;
+
+        (accountPkg as any).version = ACCOUNT_PACKAGE_VERSION;
         await ensureKeyPair(true);
       }
 
@@ -550,14 +591,14 @@
   // Update account package on backend
   async function updateAccountPackage(updatedData: Partial<AccountPackage>): Promise<boolean> {
     if (!accountPackage) return false;
-    
+
     console.log('🔄 Updating account package with:', updatedData);
-    
+
     const newAccountData: AccountPackage = {
       ...accountPackage,
       ...updatedData
     };
-    
+
     try {
       const service = getDwebService(backendUrl || null, 'friends');
       // Wenn accountName leer ist, wird das Default-Scratchpad aktualisiert (ohne object_name)
@@ -571,6 +612,40 @@
       showNotification('Error updating account package: ' + error);
       return false;
     }
+  }
+
+  // Background version of updateAccountPackage - no await, runs asynchronously
+  function updateAccountPackageAsync(updatedData: Partial<AccountPackage>): void {
+    if (!accountPackage) return;
+
+    console.log('🔄 Updating account package (async) with:', updatedData);
+
+    const newAccountData: AccountPackage = {
+      ...accountPackage,
+      ...updatedData
+    };
+
+    // Update local state immediately for better UX
+    accountPackage = newAccountData;
+
+    // Run the update in background without blocking
+    (async () => {
+      try {
+        const service = getDwebService(backendUrl || null, 'friends');
+        const ok = await service.privateScratchpad.update(accountName || '', newAccountData);
+        if (ok) {
+          console.log('✅ Account package updated successfully (async)');
+        } else {
+          console.warn('⚠️ Account package update failed (async)');
+          // Revert local state on failure
+          accountPackage = { ...accountPackage };
+        }
+      } catch (error) {
+        console.error('❌ Error updating account package (async):', error);
+        // Revert local state on failure
+        accountPackage = { ...accountPackage };
+      }
+    })();
   }
   
   // Create new public scratchpad for peer communication
@@ -641,7 +716,7 @@
     sessionStartTimestamp = Date.now();
     
     const accountData: AccountPackage = {
-      version: 3, // Version 3 of the account package format (profileId als eindeutiger Schlüssel für Freunde)
+      version: ACCOUNT_PACKAGE_VERSION, // Version des Account-Package-Formats
       username: accountCreationForm.username.trim(),
       profileImage: accountCreationForm.profileImage.trim() || undefined,
       themeUrl: accountCreationForm.themeUrl.trim() || 'default',
@@ -668,10 +743,17 @@
       // Initialize Friend Request Manager (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
         friendRequestManager = new FriendRequestManager(backendUrl, '', accountName, myPrivateKeyPem);
-        const ok = await friendRequestManager.initializeProfile();
+        const result = await friendRequestManager.initializeProfileWithErrorDetails();
 
-        if (ok) {
+        if (result.success) {
           profileId = friendRequestManager.getProfileId();
+        } else {
+          // Check if it's a payment failure error
+          if (result.error?.isPaymentFailure) {
+            showPaymentFailureModal = true;
+          } else {
+            showNotification(currentTranslations.connectionError);
+          }
         }
 
         // Update profile image if available
@@ -2106,9 +2188,9 @@
   }
 
   // Create public identifier via pointer POST
-  async function createPublicIdentifier(identifier: string) {
+  async function createPublicIdentifier(identifier: string): Promise<{ success: boolean; code?: 'taken' | 'payment' | 'error' | 'self' }> {
     if (!identifier || !profileId) {
-      return;
+      return { success: false, code: 'error' };
     }
 
     const service = new DwebService(backendUrl || null, 'friends', FRIENDS_SHARED_GLOBAL_SECRET);
@@ -2121,31 +2203,37 @@
           if (accountPackage) {
             await updateAccountPackage({ ...accountPackage, publicIdentifiers });
           }
-          showNotification(currentTranslations.publicIdentifierAdded);
           showAddPublicIdentifier = false;
           newPublicIdentifier = '';
-          return;
+          showNotification(currentTranslations.publicIdentifierAdded);
+          return { success: true };
         } else {
-          showNotification(currentTranslations.publicNameTaken);
-          return;
+          return { success: false, code: 'taken' };
         }
       }
 
-      const ok = await service.pointer.createPointer(identifier, profileId);
-      if (ok) {
+      const result = await service.pointer.createPointerWithErrorDetails(identifier, profileId);
+      if (result.success) {
         publicIdentifiers = [...new Set([...publicIdentifiers, identifier])];
         if (accountPackage) {
           await updateAccountPackage({ ...accountPackage, publicIdentifiers });
         }
-        showNotification(currentTranslations.publicIdentifierAdded);
         showAddPublicIdentifier = false;
         newPublicIdentifier = '';
+        showNotification(currentTranslations.publicIdentifierAdded);
+        return { success: true };
       } else {
-        showNotification(currentTranslations.connectionError);
+        // Check if it's a payment failure error
+        if (result.error?.isPaymentFailure) {
+          showPaymentFailureModal = true;
+          return { success: false, code: 'payment' };
+        }
+        return { success: false, code: 'error' };
       }
     } catch (err) {
       console.error('Error creating public identifier', err);
-      showNotification(currentTranslations.connectionError);
+      // Keine Notification hier, Aufrufer entscheidet
+      return { success: false, code: 'error' };
     }
   }
 
@@ -2159,7 +2247,7 @@
     const displayNameToUse = pendingDisplayName || 'User';
 
     const accountData: AccountPackage = {
-      version: 3,
+      version: ACCOUNT_PACKAGE_VERSION,
       username: displayNameToUse,
       themeUrl: 'default',
       language,
@@ -2179,10 +2267,17 @@
       // FriendRequestManager initialisieren (erstellt/verifiziert Profil-Scratchpad)
       if (accountPackage) {
         friendRequestManager = new FriendRequestManager(backendUrl, '', accountName, myPrivateKeyPem);
-        const ok = await friendRequestManager.initializeProfile();
+        const result = await friendRequestManager.initializeProfileWithErrorDetails();
 
-        if (ok) {
+        if (result.success) {
           profileId = friendRequestManager.getProfileId();
+        } else {
+          // Check if it's a payment failure error
+          if (result.error?.isPaymentFailure) {
+            showPaymentFailureModal = true;
+          } else {
+            showNotification(currentTranslations.connectionError);
+          }
         }
 
         // Hinweis: Accountname im Profil erst setzen, wenn der Nutzer einen echten Namen gewählt hat
@@ -2221,7 +2316,7 @@
     } else {
       // Falls der Nutzer zuerst den Namen setzt, bevor das Package existiert:
       const accountData: AccountPackage = {
-        version: 3,
+        version: ACCOUNT_PACKAGE_VERSION,
         username: name,
         themeUrl: 'default',
         language,
@@ -2236,9 +2331,16 @@
         accountPackage = accountData;
         startSessionMonitoring();
         friendRequestManager = new FriendRequestManager(backendUrl, '', accountName, myPrivateKeyPem);
-        const ok = await friendRequestManager.initializeProfile();
-        if (ok) {
+        const result = await friendRequestManager.initializeProfileWithErrorDetails();
+        if (result.success) {
           profileId = friendRequestManager.getProfileId();
+        } else {
+          // Check if it's a payment failure error
+          if (result.error?.isPaymentFailure) {
+            showPaymentFailureModal = true;
+          } else {
+            showNotification(currentTranslations.connectionError);
+          }
         }
         try {
             const p = await friendRequestManager.readMyProfile();
@@ -2413,9 +2515,16 @@
       if (!profileId) {
         // Profil-ID kann hier nach initializeProfile erst gesetzt werden; wir versuchen zu lesen, wenn vorhanden
         try {
-          const ok = await friendRequestManager.initializeProfile();
-          if (ok) {
+          const result = await friendRequestManager.initializeProfileWithErrorDetails();
+          if (result.success) {
             profileId = friendRequestManager.getProfileId();
+          } else {
+            // Check if it's a payment failure error
+            if (result.error?.isPaymentFailure) {
+              showPaymentFailureModal = true;
+            } else {
+              showNotification(currentTranslations.connectionError);
+            }
           }
         } catch (_) { /* ignore */ }
       }
@@ -2548,6 +2657,18 @@
       </div>
     </div>
   {/if}
+
+  {#if showMigrationNotice}
+    <div class="session-overlay">
+      <div class="session-message">
+        <h2>⚠️ {currentTranslations.migrationNoticeTitle}</h2>
+        <p>{currentTranslations.migrationNoticeMessage}</p>
+        <button class="primary-button" on:click={() => (showMigrationNotice = false)}>
+          {currentTranslations.migrationNoticeAcknowledge}
+        </button>
+      </div>
+    </div>
+  {/if}
   
   <!-- Settings Modal -->
   {#if showSettingsModal && accountPackage}
@@ -2593,6 +2714,13 @@
       on:accept={handleAcceptFriendRequest}
     />
   {/if}
+
+  <!-- Payment Failure Modal -->
+  <PaymentFailureModal
+    language={language}
+    visible={showPaymentFailureModal}
+    onClose={() => (showPaymentFailureModal = false)}
+  />
 </div>
 
 <style>

@@ -21,7 +21,7 @@
   export let loadTheme: (url: string) => void;
   export let scheduleDisplayNameSave: (name: string) => void;
   export let reRequestNotificationPermission: () => Promise<void>;
-  export let createPublicIdentifier: (id: string) => Promise<void>;
+  export let createPublicIdentifier: (id: string) => Promise<{ success: boolean; code?: 'taken' | 'payment' | 'error' | 'self' }>;
   export let showNotification: (msg: string) => void;
 
   const dispatch = createEventDispatcher();
@@ -30,6 +30,7 @@
   let displayNameDraft = accountPackage?.username || '';
   let showAddPublicIdentifier = false;
   let newPublicIdentifier = '';
+  let publicIdError = '';
 
   // Reaktive Übersetzungen
   $: currentTranslations = translations[language] || ({} as any);
@@ -43,6 +44,28 @@
     // Kein PrivateKey im Account-Package, nur Re-Derivation triggern
     await ensureKeyPair();
     showNotification(currentTranslations.settingsUpdated || 'Settings updated');
+  }
+
+  // Public Identifier hinzufügen (mit lokaler Vorprüfung)
+  async function handleAddPublicIdentifier() {
+    const id = (newPublicIdentifier || '').trim();
+    if (!id) {
+      publicIdError = currentTranslations.enterPublicIdentifier || 'Enter public identifier';
+      return;
+    }
+    const res = await createPublicIdentifier(id);
+    if (!res?.success) {
+      if (res?.code === 'taken') {
+        publicIdError = currentTranslations.publicNameTaken || 'Public name already taken';
+        return;
+      }
+      // Für andere Fehler zeigen wir keine Notification hier, Feld bleibt unverändert
+      return;
+    }
+    // Erfolg -> Feld leeren und Abschnitt schließen
+    publicIdError = '';
+    newPublicIdentifier = '';
+    showAddPublicIdentifier = false;
   }
 </script>
 
@@ -85,11 +108,15 @@
             on:input={async (e) => {
               const val = (e.target as HTMLInputElement).value;
               if (accountPackage) {
-                const ok = await updateAccountPackage({ ...accountPackage, profileImage: val });
-                if (ok && friendRequestManager) {
-                  await friendRequestManager.updateProfileImage(val);
-                }
+                // Update immediately for better UX
                 showNotification(currentTranslations.settingsUpdated || 'Settings updated');
+
+                // Update account package in background
+                updateAccountPackage({ ...accountPackage, profileImage: val }).then(ok => {
+                  if (ok && friendRequestManager) {
+                    friendRequestManager.updateProfileImage(val);
+                  }
+                });
               }
             }}
           />
@@ -114,11 +141,12 @@
             on:input={async (e) => {
               const val = (e.target as HTMLInputElement).value;
               if (accountPackage) {
-                const ok = await updateAccountPackage({ ...accountPackage, themeUrl: val });
-                if (ok) {
-                  showNotification(currentTranslations.settingsUpdated || 'Settings updated');
-                  loadTheme(val);
-                }
+                // Update immediately for better UX
+                showNotification(currentTranslations.settingsUpdated || 'Settings updated');
+                loadTheme(val);
+
+                // Update account package in background
+                updateAccountPackage({ ...accountPackage, themeUrl: val });
               }
             }}
           />
@@ -135,9 +163,11 @@
               changeLanguage(newLang);
               language = newLang;
               if (accountPackage) {
-                updateAccountPackage({ ...accountPackage, language: newLang }).then(() => {
-                  showNotification(translations[newLang]?.settingsUpdated || 'Settings updated');
-                });
+                // Update immediately for better UX
+                showNotification(translations[newLang]?.settingsUpdated || 'Settings updated');
+
+                // Update account package in background
+                updateAccountPackage({ ...accountPackage, language: newLang });
               }
             }}
           >
@@ -170,10 +200,19 @@
                 type="text"
                 placeholder={currentTranslations.enterPublicIdentifier}
                 bind:value={newPublicIdentifier}
-                on:keydown={(e) => e.key === 'Enter' && createPublicIdentifier(newPublicIdentifier)}
+                class:error={!!publicIdError}
+                on:input={() => (publicIdError = '')}
+                on:keydown={async (e) => {
+                  if (e.key === 'Enter') {
+                    await handleAddPublicIdentifier();
+                  }
+                }}
               />
-              <button class="confirm-button" on:click={() => createPublicIdentifier(newPublicIdentifier)} title="Add">✓</button>
+              <button class="confirm-button" on:click={handleAddPublicIdentifier} title="Add">✓</button>
             </div>
+            {#if publicIdError}
+              <div class="error-text">{publicIdError}</div>
+            {/if}
           {/if}
 
           {#if !showAddPublicIdentifier}
@@ -266,7 +305,9 @@
   .public-identifiers { list-style: none; padding: 0; margin: 0.5rem 0; }
   .public-identifiers li { background: var(--foreground-color2); padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; }
   .public-id-input { display: flex; gap: 0.5rem; }
-  .public-id-input input { flex: 1; }
+  .public-id-input input { flex: 1; padding: 0.5rem; border: 1px solid var(--line-color); border-radius: 6px; background: var(--foreground-color1); color: var(--text-color); }
+  .public-id-input input.error { border-color: #d9534f; background: rgba(217, 83, 79, 0.1); }
+  .error-text { margin-top: 0.5rem; color: #d9534f; font-size: 0.85rem; }
   .confirm-button { background: var(--notification-color); color: #fff; border: none; border-radius: 4px; padding: 0 0.75rem; cursor: pointer; }
   .add-button { background: var(--foreground-color2); border: 1px solid var(--line-color); border-radius: 50%; width: 1.75rem; height: 1.75rem; cursor: pointer; font-size: 1.2rem; margin-top: 0.25rem; }
   .add-button:hover, .confirm-button:hover { opacity: 0.8; }

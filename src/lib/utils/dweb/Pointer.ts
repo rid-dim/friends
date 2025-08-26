@@ -71,7 +71,7 @@ export class Pointer extends Mutable {
 
   /**
    * Create a pointer that targets a scratchpad
-   * 
+   *
    * @param pointerName - Name of the pointer to create
    * @param scratchpadTargetAddress - Target scratchpad address
    */
@@ -87,7 +87,7 @@ export class Pointer extends Mutable {
     }`;
 
     const url = this.buildUrl(pointerName);
-    
+
     try {
       // Wenn ein Ant-Owner-Secret gesetzt wurde (z.B. für Public Identifier), wird es verwendet
       const response = await fetch(url, {
@@ -95,11 +95,68 @@ export class Pointer extends Mutable {
         headers: this.getHeaders(!!this.antOwnerSecret), // Sende Secret nur wenn es existiert
         body: payload
       });
-      
+
       return response.ok && response.status === 201;
     } catch (error) {
       console.error('Error creating pointer:', error);
       return false;
+    }
+  }
+
+  /**
+   * Create a pointer that targets a scratchpad with detailed error information
+   *
+   * @param pointerName - Name of the pointer to create
+   * @param scratchpadTargetAddress - Target scratchpad address
+   * @returns Object with success status and error details if applicable
+   */
+  public async createPointerWithErrorDetails(pointerName: string, scratchpadTargetAddress: string): Promise<{ success: boolean; error?: { status: number; message: string; isPaymentFailure: boolean } }> {
+    // Build payload string manually to keep huge counter numeric (avoids JS precision loss)
+    const payload = `{
+      "pointer_address": "",
+      "counter": ${MAX_COUNTER},
+      "chunk_target_address": "",
+      "graphentry_target_address": "",
+      "pointer_target_address": "",
+      "scratchpad_target_address": "${scratchpadTargetAddress}"
+    }`;
+
+    const url = this.buildUrl(pointerName);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(!!this.antOwnerSecret),
+        body: payload
+      });
+
+      if (response.ok && response.status === 201) {
+        return { success: true };
+      } else {
+        const responseText = await response.text();
+        const isPaymentFailure = response.status === 502 && responseText.includes('Payment failure occurred');
+
+        console.error('Error creating pointer:', responseText);
+
+        return {
+          success: false,
+          error: {
+            status: response.status,
+            message: responseText,
+            isPaymentFailure
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Error creating pointer:', error);
+      return {
+        success: false,
+        error: {
+          status: 0,
+          message: error instanceof Error ? error.message : 'Unknown error',
+          isPaymentFailure: false
+        }
+      };
     }
   }
   
