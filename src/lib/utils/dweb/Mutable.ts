@@ -78,16 +78,23 @@ export abstract class Mutable {
    * 
    * @param objectName - The object name to read
    * @param params - Additional query parameters
+   * @param timeoutMs - Optional timeout in milliseconds (defaults to 10_000)
    */
-  public async read<T = any>(objectName: string, params: Record<string, string> = {}): Promise<T | null> {
+  public async read<T = any>(objectName: string, params: Record<string, string> = {}, timeoutMs: number = 10_000): Promise<T | null> {
     const url = this.buildUrl(objectName, params);
-    
+
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, Math.max(0, timeoutMs));
+
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        signal: abortController.signal
       });
-      
+
       if (response.ok) {
         return await response.json() as T;
       } else {
@@ -95,8 +102,14 @@ export abstract class Mutable {
         return null;
       }
     } catch (error) {
-      console.error(`Error reading ${this.constructor.name}:`, error);
+      if ((error as any)?.name === 'AbortError') {
+        console.warn(`Read timeout for ${this.constructor.name} after ${timeoutMs}ms at ${url}`);
+      } else {
+        console.error(`Error reading ${this.constructor.name}:`, error);
+      }
       return null;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -105,8 +118,8 @@ export abstract class Mutable {
    * 
    * @param objectName - The object name to check
    */
-  public async exists(objectName: string): Promise<boolean> {
-    const data = await this.read(objectName);
+  public async exists(objectName: string, timeoutMs?: number): Promise<boolean> {
+    const data = await this.read(objectName, {}, timeoutMs);
     return data !== null;
   }
 

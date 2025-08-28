@@ -79,12 +79,12 @@ export class Scratchpad extends Mutable {
    * Read the scratchpad data for the pre-configured object name
    * Only works if setObjectName has been called
    */
-  public async readCurrent<T = any>(): Promise<ScratchpadData & { data: T } | null> {
+  public async readCurrent<T = any>(timeoutMs: number = 10_000): Promise<ScratchpadData & { data: T } | null> {
     if (!this.objectName) {
       throw new Error('No object name set. Call setObjectName first.');
     }
     
-    const result = await this.readScratchpad<T>(this.objectName);
+    const result = await this.readScratchpad<T>(this.objectName, {}, timeoutMs);
     this.cachedData = result;
     return result;
   }
@@ -218,8 +218,8 @@ export class Scratchpad extends Mutable {
    * @param objectName - Name of the scratchpad to read
    * @param params - Additional query parameters
    */
-  public async readScratchpad<T = any>(objectName: string, params: Record<string, string> = {}): Promise<ScratchpadData & { data: T } | null> {
-    const data = await super.read<ScratchpadData>(objectName, params);
+  public async readScratchpad<T = any>(objectName: string, params: Record<string, string> = {}, timeoutMs: number = 10_000): Promise<ScratchpadData & { data: T } | null> {
+    const data = await super.read<ScratchpadData>(objectName, params, timeoutMs);
     
     if (!data) return null;
     

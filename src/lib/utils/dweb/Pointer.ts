@@ -51,21 +51,30 @@ export class Pointer extends Mutable {
    * @param objectName - Name of the pointer to read
    * @param params - Additional query parameters
    */
-  public async readPointer(objectName: string, params: Record<string, string> = {}): Promise<PointerData | null> {
+  public async readPointer(objectName: string, params: Record<string, string> = {}, timeoutMs: number = 10_000): Promise<PointerData | null> {
     // Wir benötigen bei manchen Backends das Ant-Owner-Secret auch für GETs auf Pointer
     const url = this.buildUrl(objectName, params);
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), Math.max(0, timeoutMs));
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: this.getHeaders(!!this.antOwnerSecret)
+        headers: this.getHeaders(!!this.antOwnerSecret),
+        signal: abortController.signal
       });
       if (response.ok) {
         return await response.json() as PointerData;
       }
       return null;
     } catch (error) {
-      console.error('Error reading pointer:', error);
+      if ((error as any)?.name === 'AbortError') {
+        console.warn(`Read timeout for Pointer after ${timeoutMs}ms at ${url}`);
+      } else {
+        console.error('Error reading pointer:', error);
+      }
       return null;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
