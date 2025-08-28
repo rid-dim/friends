@@ -2427,6 +2427,8 @@
     showNotification(currentTranslations.settingsUpdated);
   }
 
+  // Namensabgleich erfolgt nun direkt in ensureKeyPair(), kein separater reaktiver Guard mehr nötig
+
   // Stellt sicher, dass im Profil ein Friend-Request-Scratchpad verlinkt ist
   async function ensureFriendRequestLink() {
     if (!friendRequestManager || !profileId) return;
@@ -2532,10 +2534,19 @@
       try {
         const prof = await friendRequestManager.readMyProfile();
         if (prof) {
+          let changed = false;
           if (prof.publicKeyPem !== publicKeyPem) {
             prof.publicKeyPem = publicKeyPem;
+            changed = true;
+          }
+          if (accountPackage?.username && prof.accountname !== accountPackage.username) {
+            prof.accountname = accountPackage.username;
+            delete (prof as any).accountName;
+            changed = true;
+          }
+          if (changed) {
             await friendRequestManager.writeProfile(prof);
-            console.log('✅ PublicKey im Profil-Scratchpad aktualisiert');
+            console.log('✅ Profil aktualisiert (Key/Name konsistent)');
           }
         }
       } catch (e) {
