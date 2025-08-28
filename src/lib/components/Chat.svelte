@@ -1,9 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { translations } from '../../i18n/translations';
-  import AttachmentView from '../file-handling/AttachmentView.svelte';
+  import AttachmentRemoteView from '../file-handling/AttachmentRemoteView.svelte';
   import FileUploader from '../file-handling/FileUploader.svelte';
-  import type { FileAttachment } from '../file-handling/types';
   import type { Friend } from '../types';
   import { onMount } from 'svelte';
   import { tick } from 'svelte';
@@ -15,7 +14,6 @@
     text: string;
     timestamp: Date;
     isSelf: boolean;
-    attachment?: FileAttachment;
   }> = [];
   
   export let myNick: string = 'User';
@@ -33,7 +31,28 @@
   const dispatch = createEventDispatcher();
   
   let messageInput = '';
-  let pendingAttachment: FileAttachment | null = null;
+  // Remote-Referenz-Parsing
+  type RemoteMeta = { caption: string; dataMapHex: string; mimeType: string };
+  function parseRemoteAttachment(text: string | undefined | null): RemoteMeta | null {
+    if (!text) return null;
+    const re = /\[(.*?)\]\(([0-9a-fA-F]+)\+([a-zA-Z0-9!#$&^_+\.-]+\/[a-zA-Z0-9!#$&^_+\.-]+)\)/;
+    const m = text.match(re);
+    if (!m) return null;
+    return { caption: m[1] || '', dataMapHex: m[2], mimeType: m[3] };
+  }
+  // Cache nach stabiler Message-Identität, um Index-Kollisionen zu vermeiden
+  const parsedCache = new Map<string, RemoteMeta | null>();
+  function getParsedFor(message: { nick: string; text: string; timestamp: Date }, fallbackKey: number): RemoteMeta | null {
+    const key = `${message.nick}|${message.timestamp?.toISOString?.() || ''}|${message.text ?? ''}|${fallbackKey}`;
+    if (!parsedCache.has(key)) {
+      parsedCache.set(key, parseRemoteAttachment(message.text));
+    }
+    return parsedCache.get(key) ?? null;
+  }
+
+  // Pending Upload (vom Uploader)
+  type PendingUpload = { dataMapHex: string; mimeType: string; fileName: string; size: number } | null;
+  let pendingUpload: PendingUpload = null;
   let messagesContainer: HTMLDivElement;
   let showPeerIdInput = false;
   let newPeerId = '';
@@ -56,18 +75,22 @@
   }
   
   function sendMessage() {
-    if (!isConnected || (!messageInput.trim() && !pendingAttachment)) {
+    if (!isConnected || (!messageInput.trim() && !pendingUpload)) {
       return;
     }
     
-    dispatch('sendMessage', {
-      text: messageInput.trim(),
-      attachment: pendingAttachment
-    });
+    let textToSend = messageInput.trim();
+    if (pendingUpload) {
+      // Verpacke die Nachricht in unsere Referenzsyntax
+      const caption = textToSend; // ganze Nachricht als caption
+      textToSend = `[${caption}](${pendingUpload.dataMapHex}+${pendingUpload.mimeType})`;
+    }
+    
+    dispatch('sendMessage', { text: textToSend });
     
     // Clear input
     messageInput = '';
-    pendingAttachment = null;
+    pendingUpload = null;
   }
   
   function scrollToBottom() {
@@ -83,31 +106,7 @@
     dispatch('notification', translations[language].peerIdCopied);
   }
   
-  function handleFileSelect(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      const file = input.files[0];
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
-        const attachmentId = Date.now().toString();
-        const attachment: FileAttachment = {
-          id: attachmentId,
-          name: file.name,
-          type: file.type as any || 'application/octet-stream',
-          size: file.size,
-          data: dataUrl,
-          complete: true
-        };
-        pendingAttachment = attachment;
-        // Keine Benachrichtigung mehr anzeigen
-        // dispatch('notification', `Attached: ${file.name}`);
-      };
-      reader.readAsDataURL(file);
-      // Reset the input
-      input.value = '';
-    }
-  }
+  // Kein globales Re-Parsing nötig – wird pro Nachricht on-demand gecached
   
   // Auto-scroll when new messages arrive
   $: if (messages.length) {
@@ -223,21 +222,24 @@
         <p>{t.noMessages}</p>
       </div>
     {:else}
-      {#each messages as message}
+      {#each messages as message, i}
         <div class="message" class:self={message.isSelf}>
           <div class="message-header">
             <span class="nick">{message.nick}</span>
             <span class="time">{message.timestamp.toLocaleTimeString()}</span>
           </div>
           <div class="message-body">
-            {#if message.text}
+            {#if getParsedFor(message, i)}
+              <AttachmentRemoteView 
+                dataMapHex={getParsedFor(message, i)!.dataMapHex}
+                mimeType={getParsedFor(message, i)!.mimeType}
+                caption={getParsedFor(message, i)!.caption}
+                backendUrl={backendUrl}
+                senderName={message.nick}
+                receivedAt={message.timestamp}
+              />
+            {:else if message.text}
               <div class="message-text">{message.text}</div>
-            {/if}
-            
-            {#if message.attachment}
-              <div class="attachment-container">
-                <AttachmentView attachment={message.attachment} />
-              </div>
             {/if}
           </div>
         </div>
@@ -258,26 +260,31 @@
       
       <div class="input-controls">
         <FileUploader 
-          on:fileSelected={({detail}) => {
-            pendingAttachment = detail.attachment;
+          {backendUrl}
+          on:uploadReady={({detail}) => {
+            pendingUpload = {
+              dataMapHex: detail.dataMapHex,
+              mimeType: detail.mimeType,
+              fileName: detail.fileName,
+              size: detail.size
+            };
           }}
           on:error={({detail}) => {
             dispatch('notification', detail);
           }}
         />
-        
-        {#if pendingAttachment}
+        {#if pendingUpload}
           <div class="pending-attachment">
-            <span class="attachment-name">{pendingAttachment.name}</span>
-            <button class="remove-attachment" on:click={() => pendingAttachment = null}>✕</button>
+            <span class="attachment-name">{pendingUpload.fileName}</span>
+            <button class="remove-attachment" on:click={() => pendingUpload = null}>✕</button>
           </div>
         {/if}
-        
+
         <button
           on:click={sendMessage}
-          disabled={!isConnected || (!messageInput.trim() && !pendingAttachment)}
+          disabled={!isConnected || (!messageInput.trim() && !pendingUpload)}
           class="send-button"
-          class:active={isConnected && (messageInput.trim() || pendingAttachment)}
+          class:active={isConnected && (messageInput.trim() || pendingUpload)}
           title={!isConnected ? t.waitForFriendOnline : ''}
         >
           {t.send}

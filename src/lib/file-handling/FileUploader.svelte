@@ -1,48 +1,55 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import type { FileAttachment } from './types';
-  
+  import { ImmutableFileService } from '../utils/dweb/ImmutableFileService';
+
   // Props
   export let disabled: boolean = false;
-  export let maxSize: number = 100 * 1024 * 1024; // 100MB max (generous limit to prevent memory issues)
-  export let acceptedTypes: string = ""; // File types to accept, e.g. "image/*,.pdf"
-  
+  export let maxSize: number = 100 * 1024 * 1024; // 100MB max
+  export let acceptedTypes: string = ""; // e.g. "image/*,.pdf"
+  export let backendUrl: string = '';
+  export let antAppId: string = 'friends';
+  export let antOwnerSecret: string | null = null;
+
   // Event dispatcher
   const dispatch = createEventDispatcher();
-  
+
   // State
   let uploading = false;
   let fileInput: HTMLInputElement;
-  
-  // Functions
-  function handleFileSelect(event: Event) {
+
+  function filenameWithoutExt(name: string): string {
+    const i = name.lastIndexOf('.');
+    return i > 0 ? name.substring(0, i) : name;
+  }
+
+  async function handleFileSelect(event: Event) {
     const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      const file = input.files[0];
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
-        const attachmentId = Date.now().toString();
-        const attachment: FileAttachment = {
-          id: attachmentId,
-          name: file.name,
-          type: file.type || 'application/octet-stream',
-          size: file.size,
-          data: dataUrl,
-          complete: true,
-          mimeType: file.type || 'application/octet-stream'
-        };
-        dispatch('fileSelected', { attachment });
-      };
-      reader.onerror = () => {
-        dispatch('error', 'Failed to read file');
-      };
-      reader.readAsDataURL(file);
-      // Reset the input
-      input.value = '';
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    input.value = '';
+
+    if (file.size > maxSize) {
+      dispatch('error', `File too large (max ${Math.round(maxSize / (1024*1024))}MB)`);
+      return;
+    }
+
+    uploading = true;
+    try {
+      const service = new ImmutableFileService(backendUrl || null, antAppId, antOwnerSecret);
+      const result = await service.uploadFile(file, file.name, file.type, false);
+      dispatch('uploadReady', { 
+        dataMapHex: result.dataMapHex,
+        mimeType: file.type || 'application/octet-stream',
+        fileName: file.name,
+        size: file.size
+      });
+    } catch (e) {
+      dispatch('error', e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      uploading = false;
     }
   }
-  
+
   function triggerFileInput() {
     if (!disabled && !uploading) {
       fileInput.click();
@@ -51,7 +58,7 @@
 </script>
 
 <div class="file-uploader">
-  <label class="upload-button" class:disabled>
+  <label class="upload-button" class:disabled={disabled || uploading} class:uploading={uploading} title={uploading ? 'Uploading…' : ''}>
     <input
       type="file"
       bind:this={fileInput}
@@ -59,7 +66,11 @@
       accept={acceptedTypes}
       {disabled}
     />
-    <span class="icon">📎</span>
+    {#if uploading}
+      <span class="spinner" aria-live="polite" aria-label="Uploading"></span>
+    {:else}
+      <span class="icon">📎</span>
+    {/if}
   </label>
 </div>
 
@@ -95,5 +106,20 @@
   
   .icon {
     font-size: 1.2rem;
+  }
+
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--foreground-color2);
+    border-top: 2px solid var(--notification-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 </style> 
