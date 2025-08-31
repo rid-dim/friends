@@ -3015,15 +3015,16 @@
   
   .notification {
     position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 16px;
+    right: 16px;
     background: var(--notification-color);
     color: #fff;
-    padding: 1rem 2rem;
+    padding: 0.75rem 1rem;
     border-radius: 8px;
     z-index: 2000;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: min(420px, 80vw);
+    word-break: break-word;
   }
   
   .session-overlay {
