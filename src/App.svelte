@@ -2733,7 +2733,6 @@
       {reRequestNotificationPermission}
       {createPublicIdentifier}
       {removePublicIdentifier}
-      {ensureKeyPair}
       {showNotification}
       on:close={() => showSettingsModal = false}
     />

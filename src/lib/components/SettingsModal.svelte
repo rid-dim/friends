@@ -18,7 +18,6 @@
   // Funktionen, die aus der Eltern-Komponente gereicht werden
   export let changeLanguage: (lang: Language) => void;
   export let updateAccountPackage: (data: any) => Promise<boolean>;
-  export let ensureKeyPair: () => Promise<void>;
   export let loadTheme: (url: string) => void;
   export let scheduleDisplayNameSave: (name: string) => void;
   export let reRequestNotificationPermission: () => Promise<void>;
@@ -74,12 +73,7 @@
     }
   }
 
-  // RSA Keypair regeneration
-  async function regenerateKeyPair() {
-    // Kein PrivateKey im Account-Package, nur Re-Derivation triggern
-    await ensureKeyPair();
-    showNotification(currentTranslations.settingsUpdated || 'Settings updated');
-  }
+  // RSA-Key-Regen entfernt – Schlüssel werden deterministisch abgeleitet
 
   // Public Identifier hinzufügen (mit lokaler Vorprüfung)
   async function handleAddPublicIdentifier() {
@@ -285,11 +279,7 @@
           </div>
         {/if}
 
-        <!-- RSA Keypair Regeneration -->
-        <div class="setting-group">
-          <div class="section-label">{currentTranslations.encryption}</div>
-          <button on:click={regenerateKeyPair}>{currentTranslations.regenerateKey}</button>
-        </div>
+        
 
         <!-- Connected Wallet -->
         <div class="setting-group wallet-container">
