@@ -34,11 +34,11 @@ For more detailed instructions regarding dweb, please visit the [dweb repository
 
 the current version of dweb should open at port 38617 and therefore to open an 2nd account and to test-chat with yourself you can open:
 
-http://localhost:38617/?accountname=secondAccount
+http://localhost:40363/?accountname=secondAccount
 
 the query param accountname is used to derive a derived account - you can ofc use every key here and it has nothing to do with your username in friends ... it's just a way to get to a derived account
 
-http://localhost:38617/?accountname=thisismetoo
+http://localhost:40363/?accountname=thisismetoo
 
 ## Troubleshooting
 
