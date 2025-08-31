@@ -4,6 +4,7 @@
   import { translations, type Language } from '../../i18n/translations';
   import WalletInfo from './WalletInfo.svelte';
   import { buildDataUrl } from '../utils/imageUrl';
+  import { ImmutableFileService } from '../utils/dweb/ImmutableFileService';
 
   // --- Props ---
   export let accountPackage: any;
@@ -32,12 +33,45 @@
   let showAddPublicIdentifier = false;
   let newPublicIdentifier = '';
   let publicIdError = '';
+  let uploadingProfileImage = false;
+  let profileImageFileInput: HTMLInputElement;
 
   // Reaktive Übersetzungen
   $: currentTranslations = translations[language] || ({} as any);
 
   function closeModal() {
     dispatch('close');
+  }
+
+  function triggerProfileImageFileSelect() {
+    if (!uploadingProfileImage) {
+      profileImageFileInput?.click();
+    }
+  }
+
+  async function onProfileImageSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files && input.files[0];
+    if (!file) return;
+    uploadingProfileImage = true;
+    try {
+      const service = new ImmutableFileService(backendUrl || null, 'friends', null);
+      const result = await service.uploadFile(file, file.name, file.type, false);
+      const val = result.dataMapHex;
+      if (accountPackage) {
+        showNotification(currentTranslations.settingsUpdated || 'Settings updated');
+        // Direkt UI aktualisieren
+        await updateAccountPackage({ ...accountPackage, profileImage: val });
+        if (friendRequestManager) {
+          await friendRequestManager.updateProfileImage(val);
+        }
+      }
+    } catch (e) {
+      console.error('Profile image upload failed', e);
+    } finally {
+      uploadingProfileImage = false;
+      if (profileImageFileInput) profileImageFileInput.value = '';
+    }
   }
 
   // RSA Keypair regeneration
@@ -101,26 +135,36 @@
         <!-- Profilbild (Datamap-Adresse) -->
         <div class="setting-group">
           <label for="profile-image">{currentTranslations.profileImage}</label>
-          <input
-            id="profile-image"
-            type="text"
-            placeholder={currentTranslations.enterDatamapAddress}
-            value={accountPackage?.profileImage || ''}
-            on:input={async (e) => {
-              const val = (e.target as HTMLInputElement).value;
-              if (accountPackage) {
-                // Update immediately for better UX
-                showNotification(currentTranslations.settingsUpdated || 'Settings updated');
+          <div class="input-row">
+            <input
+              id="profile-image"
+              type="text"
+              placeholder={currentTranslations.enterDatamapAddress}
+              value={accountPackage?.profileImage || ''}
+              on:input={async (e) => {
+                const val = (e.target as HTMLInputElement).value;
+                if (accountPackage) {
+                  // Update immediately for better UX
+                  showNotification(currentTranslations.settingsUpdated || 'Settings updated');
 
-                // Update account package in background
-                updateAccountPackage({ ...accountPackage, profileImage: val }).then(ok => {
-                  if (ok && friendRequestManager) {
-                    friendRequestManager.updateProfileImage(val);
-                  }
-                });
-              }
-            }}
-          />
+                  // Update account package in background
+                  updateAccountPackage({ ...accountPackage, profileImage: val }).then(ok => {
+                    if (ok && friendRequestManager) {
+                      friendRequestManager.updateProfileImage(val);
+                    }
+                  });
+                }
+              }}
+            />
+            <input type="file" accept="image/*" bind:this={profileImageFileInput} on:change={onProfileImageSelected} style="display:none" />
+            <button class="upload-button" on:click={triggerProfileImageFileSelect} disabled={uploadingProfileImage} aria-label={currentTranslations.profileImage} title={uploadingProfileImage ? currentTranslations.loading : (currentTranslations.profileImage || 'Profile image')}>
+              {#if uploadingProfileImage}
+                <span class="small-spinner" aria-live="polite"></span>
+              {:else}
+                📤
+              {/if}
+            </button>
+          </div>
           {#if accountPackage?.profileImage}
             <div class="preview">
               <img
@@ -306,6 +350,11 @@
   .setting-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
   .setting-group input,
   .setting-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--line-color); border-radius: 6px; background: var(--background-color); color: inherit; font-size: 0.9rem; }
+  .input-row { display: flex; gap: 0.5rem; align-items: center; }
+  .upload-button { padding: 0.4rem 0.6rem; border: 1px solid var(--line-color); background: var(--foreground-color2); color: var(--text-color); border-radius: 6px; cursor: pointer; min-width: 2.25rem; display: inline-flex; align-items: center; justify-content: center; }
+  .upload-button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .small-spinner { width: 16px; height: 16px; border: 2px solid var(--foreground-color1); border-top-color: var(--notification-color); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .preview { margin-top: 0.5rem; max-width: 100px; border-radius: 4px; overflow: hidden; }
   .preview img { width: 100%; height: auto; display: block; }
   .public-identifiers { list-style: none; padding: 0; margin: 0.5rem 0; }
@@ -335,5 +384,8 @@
   .scrollable-content {
     max-height: calc(90vh - 12rem); /* Adjust for padding and header/footer */
     overflow-y: auto;
+    padding-right: 0.75rem; /* Abstand zum Scrollbalken rechts */
+    padding-left: 0.25rem;  /* leichter linker Innenabstand für Luft */
+    scrollbar-gutter: stable; /* reserviert Platz für Scrollbar (wo unterstützt) */
   }
 </style>
