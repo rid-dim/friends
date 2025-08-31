@@ -40,6 +40,8 @@ the query param accountname is used to derive a derived account - you can ofc us
 
 http://localhost:40363/?accountname=thisismetoo
 
+> I've observed trouble using between-browser-tab communication in firefox. I recomment chromium for such a local test. mDNS needs to be enabled in the local network for this to work.
+
 ## Troubleshooting
 
 I recommend installing dweb via cargo after installing [rustup](https://www.rust-lang.org/learn/get-started) (the rust development environment)
