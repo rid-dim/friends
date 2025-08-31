@@ -143,6 +143,7 @@ export const bg = {
   settings: 'Настройки',
   settingsUpdated: 'Настройките са актуализирани успешно',
   showAddPublicIdentifier: 'Добавяне на публичен идентификатор',
+  showOfflineFriends: 'Офлайн приятели',
   showOriginalText: 'Показване на оригиналния текст',
   status: 'Статус',
   targetLanguageRequired: 'Целевият език е необходим за превод!',

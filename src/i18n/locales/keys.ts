@@ -143,6 +143,7 @@ export type TranslationKey =
   | 'settings'
   | 'settingsUpdated'
   | 'showAddPublicIdentifier'
+  | 'showOfflineFriends'
   | 'showOriginalText'
   | 'status'
   | 'targetLanguageRequired'

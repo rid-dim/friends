@@ -143,6 +143,7 @@ export const zh = {
   settings: '设置',
   settingsUpdated: '设置已成功更新',
   showAddPublicIdentifier: '添加公共标识符',
+  showOfflineFriends: '离线好友',
   showOriginalText: '显示原始文本',
   status: '状态',
   targetLanguageRequired: '翻译需要目标语言！',

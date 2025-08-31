@@ -143,6 +143,7 @@ export const ko = {
   settings: '설정',
   settingsUpdated: '설정이 성공적으로 업데이트됨',
   showAddPublicIdentifier: '공개 식별자 추가',
+  showOfflineFriends: '오프라인 친구',
   showOriginalText: '원본 텍스트 표시',
   status: '상태',
   targetLanguageRequired: '번역을 위해 대상 언어가 필요합니다!',

@@ -143,6 +143,7 @@ export const fr = {
   settings: 'Paramètres',
   settingsUpdated: 'Paramètres mis à jour avec succès',
   showAddPublicIdentifier: 'Ajouter un identifiant public',
+  showOfflineFriends: 'Amis hors ligne',
   showOriginalText: 'Afficher le texte original',
   status: 'État',
   targetLanguageRequired: 'La langue cible est requise pour la traduction !',

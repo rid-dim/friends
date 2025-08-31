@@ -143,6 +143,7 @@ export const es = {
   settings: 'Configuraciones',
   settingsUpdated: 'Configuración actualizada con éxito',
   showAddPublicIdentifier: 'Añadir identificador público',
+  showOfflineFriends: 'Amigos sin conexión',
   showOriginalText: 'Mostrar texto original',
   status: 'Estado',
   targetLanguageRequired: 'Se requiere el idioma de destino para la traducción!',

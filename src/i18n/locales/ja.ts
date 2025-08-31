@@ -143,6 +143,7 @@ export const ja = {
   settings: '設定',
   settingsUpdated: '設定が正常に更新されました',
   showAddPublicIdentifier: '公開識別子を追加',
+  showOfflineFriends: 'オフラインの友達',
   showOriginalText: '原文を表示',
   status: '状態',
   targetLanguageRequired: '翻訳のために対象言語が必要です！',

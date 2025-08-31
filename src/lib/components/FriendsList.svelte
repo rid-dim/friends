@@ -3,6 +3,7 @@
   import { translations, type Language } from '../../i18n/translations';
   import type { Friend } from '../types';
   import AvatarModal from './AvatarModal.svelte';
+  import { slide } from 'svelte/transition';
   
   export let friends: Friend[] = [];
   export let selectedFriendId: string | null = null;
@@ -72,6 +73,26 @@
   }
   
   $: t = translations[language] as Record<string, string>;
+
+  // Sortierung und Filter für Freunde
+  function byName(a: Friend, b: Friend): number {
+    return (a.displayName || '').localeCompare(b.displayName || '', undefined, { sensitivity: 'base' });
+  }
+
+  $: connectedFriends = (friends || []).filter(f => !!f.isConnected).sort(byName);
+  $: offlineFriends = (friends || []).filter(f => !f.isConnected).sort(byName);
+
+  // Toggle: Offline-Freunde anzeigen
+  let showOfflineFriends = false;
+  // Standard: Wenn keiner verbunden ist, alle zeigen; sonst nur verbundene
+  $: if (friends) {
+    const hasConnected = connectedFriends.length > 0;
+    if (!hasConnected) {
+      showOfflineFriends = true;
+    }
+  }
+
+  // Anzeige erfolgt in zwei Abschnitten: erst online (alphabetisch), dann optional offline (alphabetisch)
 </script>
 
 <div class="friends-list">
@@ -109,55 +130,171 @@
   </div>
   
   <div class="friends">
-    {#each friends as friend (friend.targetProfileId || friend.displayName)}
-      <div
-        class="friend"
-        class:selected={selectedFriendId === friend.peerId || selectedFriendId === friend.displayName}
-        class:disconnected={!friend.isConnected}
-        on:click={() => handleSelectFriend(friend)}
-        role="button"
-        tabindex="0"
-        on:keydown={(e) => e.key === 'Enter' && handleSelectFriend(friend)}
-      >
-        <div class="friend-info">
-          <div class="friend-name">{friend.displayName}</div>
-          {#if friend.peerId && !friend.isConnected && handshakeCountdowns[friend.peerId] !== undefined}
-            <div class="countdown">
-              {#if typeof handshakeCountdowns[friend.peerId] === 'string'}
-                {handshakeCountdowns[friend.peerId]}
-              {:else if typeof handshakeCountdowns[friend.peerId] === 'number'}
-                {handshakeCountdowns[friend.peerId]}s
-              {:else if typeof handshakeCountdowns[friend.peerId] === 'object'}
-                {#if (handshakeCountdowns[friend.peerId] as any).isConnecting}
-                  <span class="connecting-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
-                  <span class="connecting-dots">{(handshakeCountdowns[friend.peerId] as any).dots}</span>
-                {:else}
-                  <span class="retry-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
-                  <span class="retry-seconds">{(handshakeCountdowns[friend.peerId] as any).seconds}s</span>
+    {#if connectedFriends.length > 0}
+      {#each connectedFriends as friend (friend.targetProfileId || friend.displayName)}
+        <div
+          class="friend"
+          class:selected={selectedFriendId === friend.peerId || selectedFriendId === friend.displayName}
+          class:disconnected={!friend.isConnected}
+          on:click={() => handleSelectFriend(friend)}
+          role="button"
+          tabindex="0"
+          on:keydown={(e) => e.key === 'Enter' && handleSelectFriend(friend)}
+        >
+          <div class="friend-info">
+            <div class="friend-name">{friend.displayName}</div>
+            {#if friend.peerId && !friend.isConnected && handshakeCountdowns[friend.peerId] !== undefined}
+              <div class="countdown">
+                {#if typeof handshakeCountdowns[friend.peerId] === 'string'}
+                  {handshakeCountdowns[friend.peerId]}
+                {:else if typeof handshakeCountdowns[friend.peerId] === 'number'}
+                  {handshakeCountdowns[friend.peerId]}s
+                {:else if typeof handshakeCountdowns[friend.peerId] === 'object'}
+                  {#if (handshakeCountdowns[friend.peerId] as any).isConnecting}
+                    <span class="connecting-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
+                    <span class="connecting-dots">{(handshakeCountdowns[friend.peerId] as any).dots}</span>
+                  {:else}
+                    <span class="retry-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
+                    <span class="retry-seconds">{(handshakeCountdowns[friend.peerId] as any).seconds}s</span>
+                  {/if}
                 {/if}
-              {/if}
-            </div>
-          {/if}
+              </div>
+            {/if}
+          </div>
+          
+          <div class="friend-status">
+            <span class="status-dot" class:connected={friend.isConnected}></span>
+            {#if (friend.unreadCount ?? 0) > 0}
+              <span class="unread-count">{friend.unreadCount}</span>
+            {/if}
+            <button
+              class="remove-friend"
+              on:click={(e) => {
+                e.stopPropagation();
+                handleRemoveFriend(friend);
+              }}
+              title={t.removeFriend}
+            >
+              ✕
+            </button>
+          </div>
         </div>
-        
-        <div class="friend-status">
-          <span class="status-dot" class:connected={friend.isConnected}></span>
-          {#if (friend.unreadCount ?? 0) > 0}
-            <span class="unread-count">{friend.unreadCount}</span>
-          {/if}
-          <button
-            class="remove-friend"
-            on:click={(e) => {
-              e.stopPropagation();
-              handleRemoveFriend(friend);
-            }}
-            title={t.removeFriend}
-          >
-            ✕
-          </button>
+      {/each}
+
+      {#if offlineFriends.length > 0}
+        <div
+          class="offline-expander"
+          role="button"
+          tabindex="0"
+          aria-expanded={showOfflineFriends}
+          on:click={() => showOfflineFriends = !showOfflineFriends}
+          on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && (showOfflineFriends = !showOfflineFriends)}
+        >
+          <span class="arrow" class:open={showOfflineFriends}></span>
+          <span class="expander-text small">{t.showOfflineFriends}</span>
         </div>
-      </div>
-    {/each}
+
+        {#if showOfflineFriends}
+          <div id="offline-section" class="offline-section" transition:slide>
+            {#each offlineFriends as friend (friend.targetProfileId || friend.displayName)}
+              <div
+                class="friend disconnected"
+                class:selected={selectedFriendId === friend.peerId || selectedFriendId === friend.displayName}
+                on:click={() => handleSelectFriend(friend)}
+                role="button"
+                tabindex="0"
+                on:keydown={(e) => e.key === 'Enter' && handleSelectFriend(friend)}
+              >
+                <div class="friend-info">
+                  <div class="friend-name">{friend.displayName}</div>
+                  {#if friend.peerId && handshakeCountdowns[friend.peerId] !== undefined}
+                    <div class="countdown">
+                      {#if typeof handshakeCountdowns[friend.peerId] === 'string'}
+                        {handshakeCountdowns[friend.peerId]}
+                      {:else if typeof handshakeCountdowns[friend.peerId] === 'number'}
+                        {handshakeCountdowns[friend.peerId]}s
+                      {:else if typeof handshakeCountdowns[friend.peerId] === 'object'}
+                        {#if (handshakeCountdowns[friend.peerId] as any).isConnecting}
+                          <span class="connecting-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
+                          <span class="connecting-dots">{(handshakeCountdowns[friend.peerId] as any).dots}</span>
+                        {:else}
+                          <span class="retry-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
+                          <span class="retry-seconds">{(handshakeCountdowns[friend.peerId] as any).seconds}s</span>
+                        {/if}
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+                <div class="friend-status">
+                  <span class="status-dot"></span>
+                  {#if (friend.unreadCount ?? 0) > 0}
+                    <span class="unread-count">{friend.unreadCount}</span>
+                  {/if}
+                  <button
+                    class="remove-friend"
+                    on:click={(e) => {
+                      e.stopPropagation();
+                      handleRemoveFriend(friend);
+                    }}
+                    title={t.removeFriend}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      {/if}
+    {:else}
+      {#each offlineFriends as friend (friend.targetProfileId || friend.displayName)}
+        <div
+          class="friend disconnected"
+          class:selected={selectedFriendId === friend.peerId || selectedFriendId === friend.displayName}
+          on:click={() => handleSelectFriend(friend)}
+          role="button"
+          tabindex="0"
+          on:keydown={(e) => e.key === 'Enter' && handleSelectFriend(friend)}
+        >
+          <div class="friend-info">
+            <div class="friend-name">{friend.displayName}</div>
+            {#if friend.peerId && handshakeCountdowns[friend.peerId] !== undefined}
+              <div class="countdown">
+                {#if typeof handshakeCountdowns[friend.peerId] === 'string'}
+                  {handshakeCountdowns[friend.peerId]}
+                {:else if typeof handshakeCountdowns[friend.peerId] === 'number'}
+                  {handshakeCountdowns[friend.peerId]}s
+                {:else if typeof handshakeCountdowns[friend.peerId] === 'object'}
+                  {#if (handshakeCountdowns[friend.peerId] as any).isConnecting}
+                    <span class="connecting-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
+                    <span class="connecting-dots">{(handshakeCountdowns[friend.peerId] as any).dots}</span>
+                  {:else}
+                    <span class="retry-text">{(handshakeCountdowns[friend.peerId] as any).text}</span>
+                    <span class="retry-seconds">{(handshakeCountdowns[friend.peerId] as any).seconds}s</span>
+                  {/if}
+                {/if}
+              </div>
+            {/if}
+          </div>
+          <div class="friend-status">
+            <span class="status-dot"></span>
+            {#if (friend.unreadCount ?? 0) > 0}
+              <span class="unread-count">{friend.unreadCount}</span>
+            {/if}
+            <button
+              class="remove-friend"
+              on:click={(e) => {
+                e.stopPropagation();
+                handleRemoveFriend(friend);
+              }}
+              title={t.removeFriend}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      {/each}
+    {/if}
   </div>
   
   <div class="add-friend-section">
@@ -276,6 +413,51 @@
     flex: 1;
     overflow-y: auto;
     padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .offline-expander {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    margin-top: 0.75rem;
+    margin-bottom: 0.25rem;
+    border: 1px solid var(--line-color);
+    border-radius: 0;
+    background: var(--foreground-color2);
+    cursor: pointer;
+    user-select: none;
+  }
+  .offline-expander:hover {
+    background: var(--foreground-color1);
+  }
+  .offline-expander:focus {
+    outline: 2px solid var(--notification-color);
+    outline-offset: 2px;
+  }
+  .arrow {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-right: 2px solid var(--text-color);
+    border-bottom: 2px solid var(--text-color);
+    transform: rotate(-45deg);
+    transition: transform 0.2s ease;
+    margin-right: 0.25rem;
+  }
+  .arrow.open {
+    transform: rotate(45deg);
+  }
+  .expander-text {
+    flex: 1;
+    text-align: left;
+  }
+  .expander-text.small {
+    font-size: 0.85rem;
+    color: #aaa;
+  }
+  .offline-section {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
