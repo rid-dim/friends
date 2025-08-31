@@ -1,12 +1,12 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { translations } from '../../i18n/translations';
+  import { translations, type Language } from '../../i18n/translations';
   import AccountImageSrc from '../../AccountCreateImage.png';
   import WalletInfo from '../components/WalletInfo.svelte';
 
   const dispatch = createEventDispatcher();
 
-  export let language: 'en' | 'de' = 'en';
+  export let language: Language = 'en';
   // Falls bereits Scratchpads existieren, aber der Nutzer den Flow fortsetzen muss
   export let incomplete = false;
   // Wird wahr, solange das Profil-Scratchpad noch initialisiert wird

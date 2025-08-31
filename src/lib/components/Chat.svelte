@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { translations } from '../../i18n/translations';
+  import { translations, type Language } from '../../i18n/translations';
   import AttachmentRemoteView from '../file-handling/AttachmentRemoteView.svelte';
   import FileUploader from '../file-handling/FileUploader.svelte';
   import type { Friend } from '../types';
@@ -23,10 +23,14 @@
   export let friendScratchpadAddress: string = '';
   export let isLoadingScratchpad: boolean = false;
   export let scratchpadError: boolean = false;
-  export let language: 'en' | 'de' = 'en';
+  export let language: Language = 'en';
   export let debug: boolean = false;
   export let backendUrl: string = '';
   export let requestSent: boolean = false; // True if we sent a friend request but haven't received approval yet
+  // Draft-Handling
+  export let draftText: string = '';
+  export let draftPendingUpload: PendingUpload = null;
+  export let friendKey: string = '';
   
   const dispatch = createEventDispatcher();
   
@@ -67,11 +71,23 @@
     console.log('Constructed avatar URL:', avatarUrl);
   }
 
+  // Draft pro Freund laden, wenn der Friend-Key wechselt
+  let currentKey = '';
+  $: if (friendKey && friendKey !== currentKey) {
+    currentKey = friendKey;
+    messageInput = draftText || '';
+    pendingUpload = draftPendingUpload;
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       sendMessage();
     }
+  }
+  
+  function handleInputChange() {
+    dispatch('draftUpdate', { text: messageInput, pendingUpload });
   }
   
   function sendMessage() {
@@ -91,6 +107,9 @@
     // Clear input
     messageInput = '';
     pendingUpload = null;
+
+    // Draft im Parent zurücksetzen
+    dispatch('draftUpdate', { text: '', pendingUpload: null });
   }
   
   function scrollToBottom() {
@@ -254,6 +273,7 @@
       <textarea
         bind:value={messageInput}
         on:keydown={handleKeydown}
+        on:input={handleInputChange}
         placeholder={isConnected ? t.typeMessage : t.connectFirst}
         rows="2"
       ></textarea>
@@ -268,6 +288,7 @@
               fileName: detail.fileName,
               size: detail.size
             };
+            dispatch('draftUpdate', { text: messageInput, pendingUpload });
           }}
           on:error={({detail}) => {
             dispatch('notification', detail);
@@ -276,7 +297,7 @@
         {#if pendingUpload}
           <div class="pending-attachment">
             <span class="attachment-name">{pendingUpload.fileName}</span>
-            <button class="remove-attachment" on:click={() => pendingUpload = null}>✕</button>
+            <button class="remove-attachment" on:click={() => { pendingUpload = null; dispatch('draftUpdate', { text: messageInput, pendingUpload }); }}>✕</button>
           </div>
         {/if}
 
@@ -377,6 +398,7 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    min-width: 0; /* verhindert horizontales Ausdehnen bei sehr langen Wörtern */
   }
   
   .empty-chat {
@@ -428,6 +450,8 @@
     border-radius: 12px;
     max-width: 80%;
     align-self: flex-start;
+    word-break: break-word; /* bricht extrem lange Tokens um */
+    overflow-wrap: anywhere; /* zusätzliche Absicherung */
   }
   
   .message.self {
@@ -456,6 +480,9 @@
   .message-text {
     line-height: 1.4;
     white-space: pre-wrap;
+    word-break: break-word; /* bricht lange, zusammenhängende Zeichenfolgen */
+    overflow-wrap: anywhere; /* moderne Alternative, bricht wo nötig */
+    max-width: 100%;
   }
   
   .attachment-container {

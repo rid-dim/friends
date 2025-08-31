@@ -22,6 +22,7 @@
   export let scheduleDisplayNameSave: (name: string) => void;
   export let reRequestNotificationPermission: () => Promise<void>;
   export let createPublicIdentifier: (id: string) => Promise<{ success: boolean; code?: 'taken' | 'payment' | 'error' | 'self' }>;
+  export let removePublicIdentifier: (id: string) => Promise<boolean>;
   export let showNotification: (msg: string) => void;
 
   const dispatch = createEventDispatcher();
@@ -189,7 +190,12 @@
           {#if publicIdentifiers.length > 0}
             <ul class="public-identifiers">
               {#each publicIdentifiers as id}
-                <li>{id}</li>
+                <li class="public-id-item">
+                  <span class="public-id-text">{id}</span>
+                  <button class="remove-id-button" title="remove" on:click={async () => { await removePublicIdentifier(id); }}>
+                    ×
+                  </button>
+                </li>
               {/each}
             </ul>
           {/if}
@@ -304,6 +310,10 @@
   .preview img { width: 100%; height: auto; display: block; }
   .public-identifiers { list-style: none; padding: 0; margin: 0.5rem 0; }
   .public-identifiers li { background: var(--foreground-color2); padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; }
+  .public-id-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  .public-id-text { word-break: break-all; }
+  .remove-id-button { background: none; border: none; color: var(--notification-color); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0.125rem 0.25rem; }
+  .remove-id-button:hover { opacity: 0.8; }
   .public-id-input { display: flex; gap: 0.5rem; }
   .public-id-input input { flex: 1; padding: 0.5rem; border: 1px solid var(--line-color); border-radius: 6px; background: var(--foreground-color1); color: var(--text-color); }
   .public-id-input input.error { border-color: #d9534f; background: rgba(217, 83, 79, 0.1); }

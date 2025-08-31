@@ -1,8 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { translations } from '../../i18n/translations';
+  import { translations, type Language } from '../../i18n/translations';
   
-  export let language: 'en' | 'de' | 'fr' | 'es' | 'bg' | 'ja' | 'ko' | 'zh' = 'en';
+  export let language: Language = 'en';
   export let pendingRequests: number = 0;
   
   const dispatch = createEventDispatcher();

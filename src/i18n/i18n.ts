@@ -1,5 +1,6 @@
 import { writable, derived } from 'svelte/store';
-import { translations, type Language, type TranslationKey } from './translations';
+import { translations, type Language } from './translations';
+import type { TranslationKey } from './locales/keys';
 import { browser } from '$app/environment';
 
 // Sprachkürzel zu Sprachnamen-Mapping für die Sprachauswahl

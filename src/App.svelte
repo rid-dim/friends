@@ -85,6 +85,9 @@
     isSelf: boolean;
     attachment?: FileAttachment;
   }>> = {};
+  // Drafts pro Freund (Text + optional PendingUpload-Metadaten)
+  type PendingUpload = { dataMapHex: string; mimeType: string; fileName: string; size: number } | null;
+  let chatDrafts: Record<string, { text: string; pendingUpload: PendingUpload }> = {};
   
   // Connection management
   let connectionManager: ConnectionManager;
@@ -1220,6 +1223,8 @@
       chatMessages[messageKey] = [];
     }
     chatMessages[messageKey] = [...chatMessages[messageKey], message];
+    // Draft für diesen Freund zurücksetzen
+    chatDrafts[messageKey] = { text: '', pendingUpload: null };
     
     // Only send via WebRTC if friend has peerId
     if (selectedFriend.peerId) {
@@ -1244,6 +1249,13 @@
       // If no peerId, show message that friend needs to add their peer ID
       showNotification('Friend needs to add their peer ID to receive messages');
     }
+  }
+
+  // Draft-Updates vom Chat entgegennehmen
+  function handleDraftUpdate(event: CustomEvent<{ text: string; pendingUpload: PendingUpload }>) {
+    if (!selectedFriend) return;
+    const key = selectedFriend.peerId || selectedFriend.displayName;
+    chatDrafts[key] = { text: event.detail.text, pendingUpload: event.detail.pendingUpload };
   }
   
   // Handle file transfer start
@@ -1458,6 +1470,10 @@
   $: currentChatMessages = selectedFriend 
     ? (chatMessages[selectedFriend.peerId || selectedFriend.displayName] || []) 
     : [];
+  // Helper: aktueller Friend-Key
+  $: currentFriendKey = selectedFriend ? (selectedFriend.peerId || selectedFriend.displayName) : '';
+  // Drafts für aktuellen Freund
+  $: currentDraft = currentFriendKey ? (chatDrafts[currentFriendKey] || { text: '', pendingUpload: null }) : { text: '', pendingUpload: null };
   
   // Get selected friend
   $: selectedFriend = friends.find(f => 
@@ -1509,9 +1525,9 @@
 
       const lastSeen = lastSeenTimestamps[friend.peerId];
       if (lastSeen) {
-        handshakeCountdowns[friend.peerId] = createLastSeenText(lastSeen, { lang: language, t: (key) => translations[language][key as any] as string, nowMs: nowMs });
+        handshakeCountdowns[friend.peerId] = createLastSeenText(lastSeen, { lang: language, t: (key) => getTranslation(language, key as any), nowMs });
       } else {
-        handshakeCountdowns[friend.peerId] = translations[language]['lastSeenUnknown'];
+        handshakeCountdowns[friend.peerId] = getTranslation(language, 'lastSeenUnknown' as any);
       }
     });
 
@@ -2373,6 +2389,24 @@
     publicIdentifierLoading = false;
   }
 
+  // Entfernen eines Public Identifiers
+  async function removePublicIdentifier(identifier: string): Promise<boolean> {
+    try {
+      if (!identifier) return false;
+      // Lokal entfernen
+      publicIdentifiers = publicIdentifiers.filter(id => id !== identifier);
+      if (accountPackage) {
+        const ok = await updateAccountPackage({ ...accountPackage, publicIdentifiers });
+        if (!ok) return false;
+      }
+      showNotification(currentTranslations.settingsUpdated || 'Settings updated');
+      return true;
+    } catch (e) {
+      console.error('Failed to remove public identifier', e);
+      return false;
+    }
+  }
+
   function handleWizardFinish() {
     showAccountCreation = false;
     showNotification(currentTranslations.settingsUpdated);
@@ -2589,8 +2623,6 @@
   <div class="header-container">
     <StatusBar 
       appTitle="Friends"
-      username={accountPackage?.username}
-      language={language}
       on:openSettings={() => showSettingsModal = true}
     />
     <div class="header-buttons" aria-label="header actions">
@@ -2638,9 +2670,13 @@
           language={language}
           debug={debugMode}
           backendUrl={backendUrl}
+          friendKey={currentFriendKey}
+          draftText={currentDraft.text}
+          draftPendingUpload={currentDraft.pendingUpload}
           on:sendMessage={handleSendMessage}
           on:updatePeerId={handleUpdatePeerId}
           on:renameFriend={handleRenameFriend}
+          on:draftUpdate={handleDraftUpdate}
         />
       {:else}
         <div class="no-friend-selected">
@@ -2689,7 +2725,6 @@
       {backendUrl}
       {notificationStatus}
       {publicIdentifiers}
-      {publicIdentifierLoading}
       {friendRequestManager}
       {changeLanguage}
       {updateAccountPackage}
@@ -2697,6 +2732,7 @@
       {scheduleDisplayNameSave}
       {reRequestNotificationPermission}
       {createPublicIdentifier}
+      {removePublicIdentifier}
       {ensureKeyPair}
       {showNotification}
       on:close={() => showSettingsModal = false}

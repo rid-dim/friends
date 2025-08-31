@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { translations } from '../../i18n/translations';
+  import { translations, type Language } from '../../i18n/translations';
   import type { Friend } from '../types';
   import AvatarModal from './AvatarModal.svelte';
   
@@ -17,7 +17,7 @@
     relativeText?: string;
     absoluteText?: string;
   }> = {};
-  export let language: 'en' | 'de' = 'en';
+  export let language: Language = 'en';
   export let profileImage: string = '';
   export let backendUrl: string = '';
   export let publicIdentifiers: string[] = [];
